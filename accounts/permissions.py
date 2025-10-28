@@ -1,3 +1,4 @@
+#accounts/permissions.py
 from __future__ import annotations
 from typing import Iterable
 from django.core.exceptions import PermissionDenied

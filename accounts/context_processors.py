@@ -1,3 +1,4 @@
+#accounts/context_processors.py
 def roles_context(request):
     user = getattr(request, "user", None)
     is_auth = bool(user and user.is_authenticated)

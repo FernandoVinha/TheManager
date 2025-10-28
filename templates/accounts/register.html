@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Criar conta{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6 col-lg-5">
+    <div class="card card-body">
+      <h1 class="h5 mb-3">Criar conta</h1>
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        <div class="floating-group">
+          {{ form.email }}
+          <label for="{{ form.email.id_for_label }}">Email</label>
+          {% if form.email.errors %}
+            <div class="text-danger small mt-1">{{ form.email.errors.0 }}</div>
+          {% endif %}
+        </div>
+
+        <div class="floating-group">
+          {{ form.password1 }}
+          <label for="{{ form.password1.id_for_label }}">Senha</label>
+          {% if form.password1.errors %}
+            <div class="text-danger small mt-1">{{ form.password1.errors.0 }}</div>
+          {% endif %}
+        </div>
+
+        <div class="floating-group">
+          {{ form.password2 }}
+          <label for="{{ form.password2.id_for_label }}">Confirmar senha</label>
+          {% if form.password2.errors %}
+            <div class="text-danger small mt-1">{{ form.password2.errors.0 }}</div>
+          {% endif %}
+        </div>
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors.0 }}</div>
+        {% endif %}
+
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary" type="submit">Criar</button>
+          <a class="btn btn-outline-secondary" href="{% url 'login' %}">Voltar ao login</a>
+        </div>
+
+        <p class="text-secondary small mt-3 mb-0">
+          Após criar a conta, um gerente do sistema deverá atribuir seu acesso (employee/cliente).
+        </p>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

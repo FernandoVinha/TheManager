@@ -31,6 +31,7 @@ INSTALLED_APPS = [
 
     # Seus apps
     "accounts",
+    "projects",
 ]
 
 # User customizado
@@ -121,7 +122,6 @@ LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/"
 
-# =========================
-# CSRF (ajuste se usar domínio)
-# =========================
-# CSRF_TRUSTED_ORIGINS = ["https://seu-dominio.com"]
+
+
+

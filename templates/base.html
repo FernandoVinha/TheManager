@@ -1,0 +1,129 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-br" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}Agile Team Manager{% endblock %}</title>
+
+    <!-- CSRF p/ JS -->
+    <meta name="csrf-token" content="{{ csrf_token }}">
+
+    <!-- Bootstrap (opcional) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- CSS do projeto -->
+    <link rel="stylesheet" href="{% static 'css/base.css' %}">
+
+    {% block head_extra %}{% endblock %}
+
+    <!-- Estilos mínimos: labels flutuantes + ripple (complementam o base.css) -->
+    <style>
+      /* ===== Floating Labels ===== */
+      .floating-group { position: relative; margin-bottom: 1.25rem; }
+      .floating-group input, .floating-group textarea { padding-top: 1.25rem; padding-bottom: .5rem; }
+      .floating-group label {
+        position: absolute; left: .75rem; top: .7rem; font-size: .95rem;
+        color: var(--color-text-dim); pointer-events: none;
+        transition: transform .18s ease, opacity .18s ease, color .18s ease;
+        transform-origin: left top; opacity: .9;
+      }
+      .floating-group.active label { transform: translateY(-.6rem) scale(.82); opacity: .85; color: var(--color-accent); }
+
+      /* ===== Tema: animação suave ao trocar ===== */
+      .theme-switching * { transition: background-color .25s, color .25s, border-color .25s !important; }
+
+      /* ===== Ripple para botões ===== */
+      .btn { position: relative; overflow: hidden; }
+      .ripple {
+        position: absolute; border-radius: 999px; transform: scale(0);
+        animation: ripple .55s ease-out; background: rgba(255,255,255,.35); pointer-events: none;
+      }
+      @keyframes ripple { to { transform: scale(4); opacity: 0; } }
+
+      /* ===== Textos com fade-in ===== */
+      .fade-in { opacity: 0; transform: translateY(6px); }
+      .fade-in.in { opacity: 1; transform: translateY(0); transition: opacity .4s, transform .4s; }
+    </style>
+  </head>
+  <body class="fade-in">
+
+    <!-- Navbar (sem páginas internas; home = login) -->
+    <nav class="navbar navbar-expand-lg border-bottom sticky-top main-nav">
+      <div class="container-fluid">
+        <a class="navbar-brand fw-semibold" href="{% url 'login' %}">Agile TM</a>
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div id="navbarMain" class="collapse navbar-collapse">
+          <ul class="navbar-nav me-auto mb-2 mb-lg-0"></ul>
+
+          <!-- Botões de tema + auth -->
+          <div class="d-flex align-items-center gap-2">
+            <div class="btn-group" role="group" aria-label="Theme">
+              <button class="btn btn-outline-secondary btn-sm" id="btnThemeDark" title="Tema escuro">Escuro</button>
+              <button class="btn btn-outline-secondary btn-sm" id="btnThemeLight" title="Tema claro">Claro</button>
+              <button class="btn btn-primary btn-sm" id="btnThemeToggle" title="Alternar tema">Alternar</button>
+            </div>
+
+            {% if user.is_authenticated %}
+              <div class="d-flex align-items-center gap-2 ms-2">
+                <img src="{{ user.avatar_url }}" alt="avatar" class="avatar-32">
+                <span class="text-secondary small">
+                  {% if is_system_manager %}Gerente{% elif is_employee %}Funcionário{% elif is_client %}Cliente{% else %}Sem acesso{% endif %}
+                </span>
+                <a class="btn btn-sm btn-primary" href="{% url 'logout' %}">Sair</a>
+              </div>
+            {% else %}
+              <a class="btn btn-sm btn-outline-secondary" href="{% url 'register' %}">Criar conta</a>
+              <a class="btn btn-sm btn-primary" href="{% url 'login' %}">Entrar</a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Mensagens -->
+    {% if messages %}
+      <div class="container py-2">
+        {% for message in messages %}
+          <div class="alert alert-{{ message.tags|default:'secondary' }} mb-2" role="alert">
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <!-- Conteúdo -->
+    <main class="container py-4 fade-in">
+      {% block content %}
+      <!-- Como o home é o login, páginas normais vão sobrescrever este bloco -->
+      <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+          <div class="card card-body">
+            <h1 class="h5 mb-3">Bem-vindo</h1>
+            <p class="text-secondary mb-0">Use a página de <a href="{% url 'login' %}">login</a> para acessar.</p>
+          </div>
+        </div>
+      </div>
+      {% endblock %}
+    </main>
+
+    <!-- Rodapé -->
+    <footer class="py-3 small">
+      <div class="container d-flex justify-content-between">
+        <span>© {{ now|date:"Y" }} Agile Team Manager</span>
+        <span class="text-secondary">
+          {% if is_system_manager %}System Manager{% elif is_employee %}Employee{% elif is_client %}Client{% else %}Sem papel{% endif %}
+        </span>
+      </div>
+    </footer>
+
+    <!-- JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{% static 'js/base.js' %}"></script>
+    {% block scripts_extra %}{% endblock %}
+  </body>
+</html>

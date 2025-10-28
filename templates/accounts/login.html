@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Entrar{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6 col-lg-5">
+    <div class="card card-body">
+      <h1 class="h5 mb-3">Entrar</h1>
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <div class="floating-group">
+          {{ form.username }}
+          <label for="{{ form.username.id_for_label }}">Email</label>
+          {% if form.username.errors %}
+            <div class="text-danger small mt-1">{{ form.username.errors.0 }}</div>
+          {% endif %}
+        </div>
+
+        <div class="floating-group">
+          {{ form.password }}
+          <label for="{{ form.password.id_for_label }}">Senha</label>
+          {% if form.password.errors %}
+            <div class="text-danger small mt-1">{{ form.password.errors.0 }}</div>
+          {% endif %}
+        </div>
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">{{ form.non_field_errors.0 }}</div>
+        {% endif %}
+
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary" type="submit">Entrar</button>
+          <a class="btn btn-outline-secondary" href="{% url 'register' %}">Criar conta</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
