@@ -31,7 +31,7 @@ INSTALLED_APPS = [
 
     # Seus apps
     "accounts",
-    "projects",
+    "projects.apps.ProjectsConfig",
 ]
 
 # User customizado
@@ -125,3 +125,5 @@ LOGOUT_REDIRECT_URL = "/"
 
 
 
+from pathlib import Path
+PROJECTS_REPO_ROOT = Path(BASE_DIR) / "repos"

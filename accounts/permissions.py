@@ -1,10 +1,8 @@
-#accounts/permissions.py
+# accounts/permissions.py
 from __future__ import annotations
-from typing import Iterable
 from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest
-from django.utils.functional import cached_property
-
+from django.contrib.auth.mixins import AccessMixin
 
 # ======== Predicados básicos ========
 
@@ -31,9 +29,7 @@ def has_roles(user, require_manager: bool = False, require_employee: bool = Fals
         checks.append(bool(getattr(user, "is_employee", False)))
     if require_client:
         checks.append(bool(getattr(user, "is_client", False)))
-    # Se nenhuma role solicitada foi passada, caímos na regra geral "tem alguma role?"
     return any(checks) if checks else has_any_role(user)
-
 
 # ======== Decorators (function-based views) ========
 
@@ -69,32 +65,31 @@ def require_client(view_func):
         return view_func(request, *args, **kwargs)
     return _wrapped
 
-
 # ======== Mixins (class-based views) ========
 
-class RequireAnyRoleMixin:
+class RequireAnyRoleMixin(AccessMixin):
     def dispatch(self, request: HttpRequest, *args, **kwargs):
         if not has_any_role(request.user):
-            raise PermissionDenied("Sem acesso ao sistema.")
+            return self.handle_no_permission()
         return super().dispatch(request, *args, **kwargs)
 
 
-class RequireManagerMixin:
+class RequireManagerMixin(AccessMixin):
     def dispatch(self, request: HttpRequest, *args, **kwargs):
         if not has_roles(request.user, require_manager=True):
-            raise PermissionDenied("Apenas Gerente do Sistema.")
+            return self.handle_no_permission()
         return super().dispatch(request, *args, **kwargs)
 
 
-class RequireEmployeeMixin:
+class RequireEmployeeMixin(AccessMixin):
     def dispatch(self, request: HttpRequest, *args, **kwargs):
         if not has_roles(request.user, require_employee=True):
-            raise PermissionDenied("Apenas Funcionário.")
+            return self.handle_no_permission()
         return super().dispatch(request, *args, **kwargs)
 
 
-class RequireClientMixin:
+class RequireClientMixin(AccessMixin):
     def dispatch(self, request: HttpRequest, *args, **kwargs):
         if not has_roles(request.user, require_client=True):
-            raise PermissionDenied("Apenas Cliente.")
+            return self.handle_no_permission()
         return super().dispatch(request, *args, **kwargs)

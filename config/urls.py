@@ -5,7 +5,8 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("", include("accounts.urls")),   # <- login como página inicial
+    path("", include("accounts.urls")),              # login/home
+    path("projects/", include("projects.urls")),     # prefixo claro para projetos
 ]
 
 if settings.DEBUG:
