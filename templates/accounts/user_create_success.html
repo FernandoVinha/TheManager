@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Invitation link{% endblock %}
+{% block content %}
+<div class="card card-body mx-auto" style="max-width:520px;">
+  <h3 class="mb-3">User created</h3>
+  <p>Email sending is not configured. Copy the password set link below and send it to the user:</p>
+
+  <div class="input-group mb-3">
+    <input id="resetLink" class="form-control" value="{{ reset_link }}" readonly>
+    <button class="btn btn-primary" onclick="navigator.clipboard.writeText(document.getElementById('resetLink').value);alert('Copied!')">Copy</button>
+  </div>
+
+  <a href="{% url 'gitea_users' %}" class="btn btn-secondary w-100">Done</a>
+</div>
+{% endblock %}

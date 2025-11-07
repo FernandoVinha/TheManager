@@ -1,32 +1,22 @@
-# projects/forms.py
+from __future__ import annotations
 from django import forms
-from .models import Project
+from django.contrib.auth import get_user_model
+from .models import Project, ProjectMember
+
+User = get_user_model()
 
 class ProjectForm(forms.ModelForm):
     class Meta:
         model = Project
-        fields = ["name", "methodology", "description", "image"]  # sem "manager"
-        widgets = {
-            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Nome do projeto"}),
-            "methodology": forms.Select(attrs={"class": "form-select"}),
-            "description": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
-        }
+        fields = (
+            "name", "key", "methodology", "description",
+            "repo_owner", "repo_name", "visibility", "default_branch", "auto_init",
+            "sprint_length_days", "wip_limit", "xp_pair_programming",
+        )
 
-    def clean_image(self):
-        img = self.cleaned_data.get("image")
-        # (opcional) validar tamanho/formatos
-        return img
+class ProjectMemberForm(forms.ModelForm):
+    user = forms.ModelChoiceField(queryset=User.objects.all())
 
-
-class ProjectEditForm(forms.ModelForm):
     class Meta:
-        model = Project
-        fields = ["description", "image"]
-        widgets = {
-            "description": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
-        }
-
-    def clean_image(self):
-        img = self.cleaned_data.get("image")
-        # (opcional) validar tamanho/formatos
-        return img
+        model = ProjectMember
+        fields = ("user", "role")

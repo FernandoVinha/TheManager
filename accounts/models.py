@@ -1,114 +1,206 @@
-#accounts/models.py
 from __future__ import annotations
-from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
-from django.contrib.auth.models import PermissionsMixin
-from django.core.validators import MinValueValidator
+
+from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
+from django.utils.crypto import get_random_string
 
 
-def user_avatar_upload_to(instance: "User", filename: str) -> str:
-    # Ex.: avatars/42/2025-10-27_avatar.png
-    return f"avatars/{instance.pk or 'new'}/{timezone.now().date()}_{filename}"
-
-
-class UserManager(BaseUserManager):
-    use_in_migrations = True
-
-    def _create_user(self, email: str, password: str | None, **extra_fields):
-        if not email:
-            raise ValueError("Email é obrigatório.")
-        email = self.normalize_email(email)
-        user = self.model(email=email, **extra_fields)
-        if password:
-            user.set_password(password)
-        else:
-            user.set_unusable_password()
-        user.save(using=self._db)
-        return user
-
-    def create_user(self, email: str, password: str | None = None, **extra_fields):
-        extra_fields.setdefault("is_staff", False)
-        extra_fields.setdefault("is_superuser", False)
-        # por padrão, nenhum papel → sem acesso até alguém marcar
-        extra_fields.setdefault("is_system_manager", False)
-        extra_fields.setdefault("is_employee", False)
-        extra_fields.setdefault("is_client", False)
-        return self._create_user(email, password, **extra_fields)
-
-    def create_superuser(self, email: str, password: str | None = None, **extra_fields):
-        # superuser tem acesso ao Django Admin; flags de papel são opcionais
-        extra_fields.setdefault("is_staff", True)
-        extra_fields.setdefault("is_superuser", True)
-
-        if extra_fields.get("is_staff") is not True:
-            raise ValueError("Superuser precisa is_staff=True.")
-        if extra_fields.get("is_superuser") is not True:
-            raise ValueError("Superuser precisa is_superuser=True.")
-
-        # você pode, se quiser, dar todas as flags ao superuser:
-        extra_fields.setdefault("is_system_manager", True)
-        return self._create_user(email, password, **extra_fields)
-
-
-class User(AbstractBaseUser, PermissionsMixin):
+class User(AbstractUser):
     """
-    Usuário minimalista: email+senha, avatar opcional e flags de acesso ao sistema.
-    Sem qualquer relação com 'project' (outro app).
+    Custom user model with:
+    - Role hierarchy for project administration
+    - Gitea integration fields
+    - Convenience permission helpers
     """
 
-    # Credenciais
-    email = models.EmailField(unique=True, db_index=True)
+    # =========================
+    # Roles
+    # =========================
+    ROLE_ADMIN   = "admin"
+    ROLE_MANAGER = "manager"
+    ROLE_SENIOR  = "senior"
+    ROLE_REGULAR = "regular"
+    ROLE_JUNIOR  = "junior"
 
-    # Perfil
-    avatar = models.ImageField(upload_to=user_avatar_upload_to, blank=True, null=True)
+    ROLE_CHOICES = [
+        (ROLE_ADMIN,   "Admin"),
+        (ROLE_MANAGER, "Manager"),
+        (ROLE_SENIOR,  "Senior"),
+        (ROLE_REGULAR, "Regular"),
+        (ROLE_JUNIOR,  "Junior"),
+    ]
 
-    # Flags de PAPEL no sistema (qualquer combinação é possível)
-    is_system_manager = models.BooleanField(default=False)  # gerente do sistema (admin funcional)
-    is_employee = models.BooleanField(default=False)        # funcionário (usuário interno)
-    is_client = models.BooleanField(default=False)          # cliente (acesso restrito)
+    # override email → unique
+    email = models.EmailField("email address", unique=True)
 
-    # (opcional) custo/hora p/ relatórios
-    hourly_rate = models.DecimalField(
-        max_digits=10, decimal_places=2, blank=True, null=True,
-        validators=[MinValueValidator(0)]
+    role = models.CharField(
+        max_length=20,
+        choices=ROLE_CHOICES,
+        default=ROLE_REGULAR,
+        help_text="Controls allowed actions inside the system.",
     )
 
-    # Django flags
-    is_active = models.BooleanField(default=True)
-    is_staff = models.BooleanField(default=False)  # acesso ao Django admin
-    date_joined = models.DateTimeField(default=timezone.now)
+    # =========================
+    # Gitea integration
+    # =========================
+    gitea_id = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="User ID in Gitea",
+    )
+    gitea_avatar_url = models.URLField(null=True, blank=True)
+    gitea_url = models.URLField(
+        null=True, blank=True,
+        help_text="Gitea base URL used for automatic sync",
+    )
 
-    objects = UserManager()
+    password_updated_at = models.DateTimeField(null=True, blank=True)
 
-    USERNAME_FIELD = "email"
-    REQUIRED_FIELDS: list[str] = []
+    gitea_max_repo_creation = models.IntegerField(
+        null=True, blank=True,
+        help_text="Max number of repos user can create (None = server default)",
+    )
+
+    GITEA_VISIBILITY_CHOICES = (
+        ("public", "public"),
+        ("limited", "limited"),
+        ("private", "private"),
+    )
+    gitea_visibility = models.CharField(
+        max_length=16,
+        choices=GITEA_VISIBILITY_CHOICES,
+        null=True, blank=True,
+        help_text="Gitea profile visibility",
+    )
+
+    gitea_allow_create_organization = models.BooleanField(default=None, null=True, blank=True)
+    gitea_allow_git_hook = models.BooleanField(default=None, null=True, blank=True)
+    gitea_allow_import_local = models.BooleanField(default=None, null=True, blank=True)
+    gitea_restricted = models.BooleanField(default=None, null=True, blank=True)
+    gitea_prohibit_login = models.BooleanField(default=None, null=True, blank=True)
+
+    gitea_full_name = models.CharField(max_length=255, null=True, blank=True)
+    gitea_website = models.URLField(null=True, blank=True)
+    gitea_location = models.CharField(max_length=255, null=True, blank=True)
+    gitea_description = models.TextField(null=True, blank=True)
+
+    # =========================
+    # Helpers
+    # =========================
+    def __str__(self) -> str:  # pragma: no cover
+        return self.username or self.email
+
+    @property
+    def display_name(self) -> str:
+        """
+        Returns best available display label.
+        """
+        return self.get_full_name() or self.username or self.email
+
+    # --------- simple role checks ---------
+    def is_admin(self) -> bool:
+        return self.role == self.ROLE_ADMIN
+
+    def is_manager(self) -> bool:
+        return self.role == self.ROLE_MANAGER
+
+    def is_senior(self) -> bool:
+        return self.role == self.ROLE_SENIOR
+
+    def is_regular(self) -> bool:
+        return self.role == self.ROLE_REGULAR
+
+    def is_junior(self) -> bool:
+        return self.role == self.ROLE_JUNIOR
+
+    # =========================
+    # Permission helpers
+    # =========================
+    @property
+    def can_manage_users(self) -> bool:
+        """
+        Admin + Manager may create/edit users (except only Admin can create Admin accounts).
+        """
+        return self.is_admin() or self.is_manager()
+
+    @property
+    def can_delete_users(self) -> bool:
+        return self.is_admin()
+
+    @property
+    def can_create_projects(self) -> bool:
+        return self.is_admin() or self.is_manager()
+
+    @property
+    def can_manage_projects(self) -> bool:
+        return self.is_admin() or self.is_manager()
+
+    @property
+    def can_edit_self(self) -> bool:
+        return True
 
     class Meta:
-        verbose_name = "Usuário"
-        verbose_name_plural = "Usuários"
-        indexes = [
-            models.Index(fields=["email"]),
-            models.Index(fields=["is_system_manager"]),
-            models.Index(fields=["is_employee"]),
-            models.Index(fields=["is_client"]),
-        ]
+        verbose_name = "User"
+        verbose_name_plural = "Users"
+        ordering = ["date_joined"]
 
-    def __str__(self) -> str:
-        return self.email
 
-    # ===== Helpers =====
-    @property
-    def has_any_role(self) -> bool:
-        """Tem pelo menos uma flag de papel?"""
-        return bool(self.is_system_manager or self.is_employee or self.is_client)
+# ======================================================
+# User Invite Token
+# ======================================================
+class UserInvite(models.Model):
+    """
+    One-time token allowing an invited user to set password & activate account.
+    Typical flow:
+      - Manager/Admin creates User (inactive, unusable password)
+      - Create invite token → email it
+      - User opens link, sets password → account becomes active → token deleted
+    """
 
-    @property
-    def is_denied_for_system(self) -> bool:
-        """Sem papel algum → sem acesso ao sistema (fora tela de login)."""
-        if self.is_superuser:
-            return False  # superuser sempre entra
-        return not self.has_any_role
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="invite",
+    )
+    token = models.CharField(
+        max_length=72,
+        unique=True,
+        db_index=True,
+        help_text="One-time token for password setup",
+    )
+    created_at = models.DateTimeField(default=timezone.now)
 
-    def avatar_url(self) -> str:
-        return self.avatar.url if self.avatar else "https://placehold.co/128x128?text=User"
+    # Optional: expiration
+    expires_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="If defined, tokens beyond this point are invalid.",
+    )
+
+    # status helpers
+    def is_expired(self) -> bool:
+        return bool(self.expires_at and timezone.now() >= self.expires_at)
+
+    @staticmethod
+    def create_for_user(user: User, *, validity_days: int | None = 7) -> "UserInvite":
+        """
+        Static constructor — creates a new token for this user;
+        replacing older one if necessary.
+        """
+        # ensure only one invite exists
+        UserInvite.objects.filter(user=user).delete()
+
+        token = get_random_string(56)
+        expires = (
+            timezone.now() + timezone.timedelta(days=validity_days)
+            if validity_days else
+            None
+        )
+
+        return UserInvite.objects.create(
+            user=user,
+            token=token,
+            expires_at=expires,
+        )
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"Invite<{self.user_id}>"

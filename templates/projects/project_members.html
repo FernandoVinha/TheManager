@@ -1,0 +1,21 @@
+
+{% block title %}Members — {{ project.name }}{% endblock %}
+{% block content %}
+<h1>Members — {{ project.name }}</h1>
+<table class="table table-sm">
+  <thead><tr><th>User</th><th>Role</th></tr></thead>
+  <tbody>
+    {% for m in project.memberships.all %}
+      <tr><td>{{ m.user.username }}</td><td>{{ m.get_role_display }}</td></tr>
+    {% empty %}
+      <tr><td colspan="2">No members.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+<hr/>
+<h3>Add member</h3>
+<form method="post">{% csrf_token %}
+  {{ form.as_p }}
+  <button class="btn btn-primary">Add</button>
+</form>
+{% endblock %}

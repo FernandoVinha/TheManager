@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Gitea Users{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h4 m-0">Gitea Users</h1>
+
+    {% if request.user.can_manage_users %}
+      <a href="{% url 'user_create' %}" class="btn btn-primary">
+        + Add User
+      </a>
+    {% endif %}
+  </div>
+
+  <!-- Search / Filters -->
+  <form method="get" class="row g-2 mb-3">
+    <div class="col-12 col-md-6">
+      <div class="form-floating">
+        <input
+          type="text"
+          name="query"
+          value="{{ query }}"
+          class="form-control"
+          id="searchInput"
+          placeholder="Search"
+        >
+        <label for="searchInput">Search (login, name, email)</label>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-3">
+      <div class="form-floating">
+        <select name="limit" class="form-select" id="limitSelect">
+          {% for n in limit_options %}
+            <option value="{{ n }}" {% if limit == n %}selected{% endif %}>
+              {{ n }}/page
+            </option>
+          {% endfor %}
+        </select>
+        <label for="limitSelect">Page size</label>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-3">
+      <button class="btn btn-secondary w-100 h-100">
+        Apply
+      </button>
+    </div>
+  </form>
+
+  {% if error %}
+    <div class="alert alert-warning">{{ error }}</div>
+  {% endif %}
+
+  <!-- USERS GRID -->
+  <div class="row g-4">
+    {% for u in users %}
+      <div class="col-12 col-sm-6 col-lg-4">
+        <div class="og-card p-3 d-flex flex-column h-100">
+
+          <!-- Avatar -->
+          <div class="text-center mb-3">
+            {% if u.avatar_url %}
+              <img src="{{ u.avatar_url }}" class="rounded-circle" width="80" height="80" alt="avatar">
+            {% else %}
+              <div class="rounded-circle bg-secondary" style="width:80px;height:80px;"></div>
+            {% endif %}
+          </div>
+
+          <!-- Name -->
+          <h5 class="text-center mb-1">{{ u.full_name|default:u.login }}</h5>
+
+          <!-- Login -->
+          <p class="text-center text-dim small mb-1">
+            @{{ u.login }}
+          </p>
+
+          <!-- Email -->
+          <p class="text-center small mb-3">
+            {{ u.email|default:"" }}
+          </p>
+
+          <!-- Admin -->
+          {% if u.is_admin %}
+            <p class="text-center">
+              <span class="badge bg-info">Admin</span>
+            </p>
+          {% endif %}
+
+          <!-- Actions -->
+          <div class="mt-auto pt-3 d-flex flex-column gap-2">
+
+            {% if request.user.can_delete_users and not u.is_admin %}
+            <form method="post" action="{% url 'user_delete' u.id %}">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-danger w-100">
+                Delete
+              </button>
+            </form>
+            {% endif %}
+
+          </div>
+        </div>
+      </div>
+    {% empty %}
+      <p class="text-center text-dim">No users found.</p>
+    {% endfor %}
+  </div>
+
+  <!-- Pagination -->
+  <div class="d-flex justify-content-between align-items-center mt-4">
+    <div>
+      {% if total %}<small>Total: {{ total }}</small>{% endif %}
+    </div>
+    <div class="btn-group">
+      {% if has_prev %}
+        <a class="btn btn-outline-light btn-sm"
+           href="?page={{ prev_page }}&limit={{ limit }}{% if query %}&query={{ query|urlencode }}{% endif %}">
+          Previous
+        </a>
+      {% endif %}
+      {% if has_next %}
+        <a class="btn btn-outline-light btn-sm"
+           href="?page={{ next_page }}&limit={{ limit }}{% if query %}&query={{ query|urlencode }}{% endif %}">
+          Next
+        </a>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

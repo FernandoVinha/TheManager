@@ -1,39 +1,62 @@
 {% extends "base.html" %}
-{% block title %}Entrar{% endblock %}
+{% load static %}
+
+{% block title %}Sign In{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-md-6 col-lg-5">
-    <div class="card card-body">
-      <h1 class="h5 mb-3">Entrar</h1>
-      <form method="post" novalidate>
-        {% csrf_token %}
-        <div class="floating-group">
-          {{ form.username }}
-          <label for="{{ form.username.id_for_label }}">Email</label>
-          {% if form.username.errors %}
-            <div class="text-danger small mt-1">{{ form.username.errors.0 }}</div>
-          {% endif %}
-        </div>
+<div class="mx-auto" style="max-width: 480px;">
 
-        <div class="floating-group">
-          {{ form.password }}
-          <label for="{{ form.password.id_for_label }}">Senha</label>
-          {% if form.password.errors %}
-            <div class="text-danger small mt-1">{{ form.password.errors.0 }}</div>
-          {% endif %}
-        </div>
+  <div class="og-card p-4">
+    <h1 class="h4 mb-4 text-center">Sign In</h1>
 
-        {% if form.non_field_errors %}
-          <div class="alert alert-danger">{{ form.non_field_errors.0 }}</div>
-        {% endif %}
+    <form method="post" novalidate>
+      {% csrf_token %}
 
-        <div class="d-flex gap-2">
-          <button class="btn btn-primary" type="submit">Entrar</button>
-          <a class="btn btn-outline-secondary" href="{% url 'register' %}">Criar conta</a>
-        </div>
-      </form>
+      <!-- USERNAME -->
+      <div class="form-floating mb-3">
+        <input
+          type="text"
+          class="form-control"
+          id="usernameInput"
+          name="username"
+          placeholder="Username"
+          autofocus
+          required
+        >
+        <label for="usernameInput">Username</label>
+      </div>
+
+      <!-- PASSWORD -->
+      <div class="form-floating mb-3">
+        <input
+          type="password"
+          class="form-control"
+          id="passwordInput"
+          name="password"
+          placeholder="Password"
+          required
+        >
+        <label for="passwordInput">Password</label>
+      </div>
+
+      {% if form.errors %}
+      <div class="alert alert-warning py-2">
+        Invalid username or password.
+      </div>
+      {% endif %}
+
+      <button class="btn btn-primary w-100 mt-2" type="submit">
+        Sign In
+      </button>
+    </form>
+
+    <div class="text-center mt-3">
+      <a href="{% url 'forgot_password' %}" class="text-decoration-none">
+        Forgot your password?
+      </a>
     </div>
+
   </div>
+
 </div>
 {% endblock %}

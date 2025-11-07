@@ -1,18 +1,63 @@
-#accounts/context_processors.py
-def roles_context(request):
-    user = getattr(request, "user", None)
-    is_auth = bool(user and user.is_authenticated)
+# accounts/context_processors.py
 
-    return {
-        "is_authenticated": is_auth,
-        "is_superuser": bool(is_auth and user.is_superuser),
-        "is_system_manager": bool(is_auth and getattr(user, "is_system_manager", False)),
-        "is_employee": bool(is_auth and getattr(user, "is_employee", False)),
-        "is_client": bool(is_auth and getattr(user, "is_client", False)),
-        "has_any_role": bool(is_auth and (
-            getattr(user, "is_superuser", False)
-            or getattr(user, "is_system_manager", False)
-            or getattr(user, "is_employee", False)
-            or getattr(user, "is_client", False)
-        )),
+def user_role_context(request):
+    """
+    Makes user profile + permissions available to every template as `U`.
+    If user is not authenticated, U = None.
+    """
+    user = getattr(request, "user", None)
+
+    if not user or not user.is_authenticated:
+        return {"U": None}
+
+    U = {
+        # Basic identity
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "full_name": user.get_full_name() or user.username,
+
+        # Django avatar (if you add later)
+        "local_avatar": getattr(user, "avatar", None),
+
+        # Gitea info
+        "gitea_id": user.gitea_id,
+        "gitea_avatar_url": user.gitea_avatar_url,
+        "gitea_url": user.gitea_url,
+        "gitea_full_name": user.gitea_full_name,
+        "gitea_website": user.gitea_website,
+        "gitea_location": user.gitea_location,
+        "gitea_description": user.gitea_description,
+
+        # Gitea preferences
+        "gitea_visibility": user.gitea_visibility,
+        "gitea_max_repo_creation": user.gitea_max_repo_creation,
+        "gitea_allow_create_organization": user.gitea_allow_create_organization,
+        "gitea_allow_git_hook": user.gitea_allow_git_hook,
+        "gitea_allow_import_local": user.gitea_allow_import_local,
+        "gitea_restricted": user.gitea_restricted,
+        "gitea_prohibit_login": user.gitea_prohibit_login,
+
+        # Role
+        "role": user.role,
+        "is_admin": user.is_admin(),
+        "is_manager": user.is_manager(),
+        "is_senior": user.is_senior(),
+        "is_regular": user.is_regular(),
+        "is_junior": user.is_junior(),
+
+        # Permission shortcuts
+        "can_manage_users": user.can_manage_users,
+        "can_delete_users": user.can_delete_users,
+        "can_create_projects": user.can_create_projects,
+        "can_manage_projects": user.can_manage_projects,
+
+        # Useful timestamps
+        "date_joined": user.date_joined,
+        "last_login": user.last_login,
+        "password_updated_at": user.password_updated_at,
     }
+
+    return {"U": U}

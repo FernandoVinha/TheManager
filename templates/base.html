@@ -1,129 +1,88 @@
 {% load static %}
 <!doctype html>
-<html lang="pt-br" data-theme="dark">
+<html lang="en" data-bs-theme="light">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{% block title %}Agile Team Manager{% endblock %}</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>{% block title %}Console{% endblock %}</title>
 
-    <!-- CSRF p/ JS -->
-    <meta name="csrf-token" content="{{ csrf_token }}">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
 
-    <!-- Bootstrap (opcional) -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-
-    <!-- CSS do projeto -->
-    <link rel="stylesheet" href="{% static 'css/base.css' %}">
-
-    {% block head_extra %}{% endblock %}
-
-    <!-- Estilos mínimos: labels flutuantes + ripple (complementam o base.css) -->
+    <link rel="icon" href="{% static 'img/company-logo.png' %}">
     <style>
-      /* ===== Floating Labels ===== */
-      .floating-group { position: relative; margin-bottom: 1.25rem; }
-      .floating-group input, .floating-group textarea { padding-top: 1.25rem; padding-bottom: .5rem; }
-      .floating-group label {
-        position: absolute; left: .75rem; top: .7rem; font-size: .95rem;
-        color: var(--color-text-dim); pointer-events: none;
-        transition: transform .18s ease, opacity .18s ease, color .18s ease;
-        transform-origin: left top; opacity: .9;
+      :root{
+        --brand-purple: #6b4ce6;
+        --brand-purple-600:#5e40d0;
+        --bg-surface:#fff; --bg-muted:#f6f8fb;
+        --text-main:#111318; --text-dim:#5b6573; --border:#e6e9f0;
+        --focus-ring: rgba(107,76,230,.35);
       }
-      .floating-group.active label { transform: translateY(-.6rem) scale(.82); opacity: .85; color: var(--color-accent); }
-
-      /* ===== Tema: animação suave ao trocar ===== */
-      .theme-switching * { transition: background-color .25s, color .25s, border-color .25s !important; }
-
-      /* ===== Ripple para botões ===== */
-      .btn { position: relative; overflow: hidden; }
-      .ripple {
-        position: absolute; border-radius: 999px; transform: scale(0);
-        animation: ripple .55s ease-out; background: rgba(255,255,255,.35); pointer-events: none;
+      body{ background:var(--bg-muted); color:var(--text-main); }
+      .og-navbar{ background:var(--bg-surface); border-bottom:1px solid var(--border); }
+      .og-card{ background:var(--bg-surface); border:1px solid var(--border); border-radius:14px; }
+      .btn-primary{
+        --bs-btn-bg:var(--brand-purple); --bs-btn-border-color:var(--brand-purple);
+        --bs-btn-hover-bg:var(--brand-purple-600); --bs-btn-hover-border-color:var(--brand-purple-600);
       }
-      @keyframes ripple { to { transform: scale(4); opacity: 0; } }
-
-      /* ===== Textos com fade-in ===== */
-      .fade-in { opacity: 0; transform: translateY(6px); }
-      .fade-in.in { opacity: 1; transform: translateY(0); transition: opacity .4s, transform .4s; }
+      .form-floating>.form-control, .form-floating>.form-select{ border-radius:10px; border-color:var(--border); }
+      .form-floating>.form-control:focus, .form-floating>.form-select:focus{
+        border-color:var(--brand-purple); box-shadow:0 0 0 .25rem var(--focus-ring);
+      }
+      .logo{ height:28px; width:auto; }
+      .og-page{ padding-top:1.25rem; padding-bottom:2rem; }
     </style>
+    {% block extra_head %}{% endblock %}
   </head>
-  <body class="fade-in">
+  <body>
+    <!-- Top bar with only login/logout -->
+    <nav class="navbar og-navbar">
+      <div class="container-lg d-flex align-items-center justify-content-between">
+        <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+          <img class="logo" src="{% static 'img/company-logo.png' %}" alt="Logo">
+          <span class="fw-semibold">Console</span>
+        </a>
 
-    <!-- Navbar (sem páginas internas; home = login) -->
-    <nav class="navbar navbar-expand-lg border-bottom sticky-top main-nav">
-      <div class="container-fluid">
-        <a class="navbar-brand fw-semibold" href="{% url 'login' %}">Agile TM</a>
+        <ul class="navbar-nav flex-row gap-3">
+          {% if request.user.is_authenticated %}
+            <!-- If your SignOutView accepts GET (your current setup): -->
+            <li class="nav-item">
+              <a href="{% url 'logout' %}" class="nav-link">Sign out</a>
+            </li>
 
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain">
-          <span class="navbar-toggler-icon"></span>
-        </button>
-
-        <div id="navbarMain" class="collapse navbar-collapse">
-          <ul class="navbar-nav me-auto mb-2 mb-lg-0"></ul>
-
-          <!-- Botões de tema + auth -->
-          <div class="d-flex align-items-center gap-2">
-            <div class="btn-group" role="group" aria-label="Theme">
-              <button class="btn btn-outline-secondary btn-sm" id="btnThemeDark" title="Tema escuro">Escuro</button>
-              <button class="btn btn-outline-secondary btn-sm" id="btnThemeLight" title="Tema claro">Claro</button>
-              <button class="btn btn-primary btn-sm" id="btnThemeToggle" title="Alternar tema">Alternar</button>
-            </div>
-
-            {% if user.is_authenticated %}
-              <div class="d-flex align-items-center gap-2 ms-2">
-                <img src="{{ user.avatar_url }}" alt="avatar" class="avatar-32">
-                <span class="text-secondary small">
-                  {% if is_system_manager %}Gerente{% elif is_employee %}Funcionário{% elif is_client %}Cliente{% else %}Sem acesso{% endif %}
-                </span>
-                <a class="btn btn-sm btn-primary" href="{% url 'logout' %}">Sair</a>
-              </div>
-            {% else %}
-              <a class="btn btn-sm btn-outline-secondary" href="{% url 'register' %}">Criar conta</a>
-              <a class="btn btn-sm btn-primary" href="{% url 'login' %}">Entrar</a>
-            {% endif %}
-          </div>
-        </div>
+            {# If you switch to POST-only later, use this instead:
+            <li class="nav-item">
+              <form method="post" action="{% url 'logout' %}" class="d-inline">
+                {% csrf_token %}
+                <button class="nav-link btn btn-link p-0">Sign out</button>
+              </form>
+            </li>
+            #}
+          {% else %}
+            <li class="nav-item">
+              <a href="{% url 'login' %}" class="nav-link">Sign in</a>
+            </li>
+          {% endif %}
+        </ul>
       </div>
     </nav>
 
-    <!-- Mensagens -->
-    {% if messages %}
-      <div class="container py-2">
+    <!-- Flash messages -->
+    <div class="container-lg mt-3">
+      {% if messages %}
         {% for message in messages %}
-          <div class="alert alert-{{ message.tags|default:'secondary' }} mb-2" role="alert">
-            {{ message }}
-          </div>
+          <div class="alert alert-{{ message.tags }} mb-2">{{ message }}</div>
         {% endfor %}
-      </div>
-    {% endif %}
+      {% endif %}
+    </div>
 
-    <!-- Conteúdo -->
-    <main class="container py-4 fade-in">
-      {% block content %}
-      <!-- Como o home é o login, páginas normais vão sobrescrever este bloco -->
-      <div class="row justify-content-center">
-        <div class="col-md-6 col-lg-5">
-          <div class="card card-body">
-            <h1 class="h5 mb-3">Bem-vindo</h1>
-            <p class="text-secondary mb-0">Use a página de <a href="{% url 'login' %}">login</a> para acessar.</p>
-          </div>
-        </div>
-      </div>
-      {% endblock %}
+    <!-- Page content -->
+    <main class="container-lg og-page">
+      {% block content %}{% endblock %}
     </main>
 
-    <!-- Rodapé -->
-    <footer class="py-3 small">
-      <div class="container d-flex justify-content-between">
-        <span>© {{ now|date:"Y" }} Agile Team Manager</span>
-        <span class="text-secondary">
-          {% if is_system_manager %}System Manager{% elif is_employee %}Employee{% elif is_client %}Client{% else %}Sem papel{% endif %}
-        </span>
-      </div>
-    </footer>
-
-    <!-- JS -->
+    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{% static 'js/base.js' %}"></script>
-    {% block scripts_extra %}{% endblock %}
+    {% block extra_js %}{% endblock %}
   </body>
 </html>

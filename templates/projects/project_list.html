@@ -1,81 +1,26 @@
-{# templates/projects/project_list.html #}
-{% load static %}
-<!doctype html>
-<html lang="pt-br">
-  <head>
-    <meta charset="utf-8" />
-    <title>Projetos</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-      .project-card img { aspect-ratio: 16/9; object-fit: cover; }
-      .badge-scrum  { background: #0d6efd; }   /* azul */
-      .badge-kanban { background: #20c997; }   /* teal */
-      .badge-xp     { background: #6f42c1; }   /* roxo */
-    </style>
-  </head>
-  <body class="bg-light">
-    <div class="container py-4">
-      <div class="d-flex align-items-center mb-3">
-        <h1 class="h4 mb-0">Projetos</h1>
-        <a class="btn btn-primary ms-auto" href="{% url 'projects:create' %}">Novo projeto</a>
-      </div>
 
-      {% if projects %}
-        <div class="row g-3">
-          {% for p in projects %}
-            <div class="col-12 col-sm-6 col-lg-4">
-              <div class="card project-card h-100 shadow-sm">
-                <img src="{{ p.image_url }}" class="card-img-top" alt="Imagem do projeto {{ p.name }}">
-                <div class="card-body d-flex flex-column">
-
-                  <!-- Título -->
-                  <h2 class="h5 card-title mb-1">{{ p.name }}</h2>
-
-                  <!-- Gerente / data -->
-                  <div class="mb-2 small text-muted">
-                    gerente: {{ p.manager.email }} • criado em {{ p.created_at|date:"d/m/Y" }}
-                  </div>
-
-                  <!-- Metodologia -->
-                  <div class="mb-2">
-                    {% if p.methodology == 'scrum' %}
-                      <span class="badge badge-scrum">Scrum</span>
-                    {% elif p.methodology == 'kanban' %}
-                      <span class="badge badge-kanban">Kanban</span>
-                    {% else %}
-                      <span class="badge badge-xp">XP</span>
-                    {% endif %}
-                  </div>
-
-                  <!-- Descrição -->
-                  {% if p.description %}
-                    <p class="text-muted small mb-3">{{ p.description|truncatewords:24 }}</p>
-                  {% else %}
-                    <p class="text-muted small mb-3">Sem descrição.</p>
-                  {% endif %}
-
-                  <!-- BOTÕES (Somente gerente ou superuser) -->
-                  {% if is_superuser or is_system_manager %}
-                    <div class="mt-auto d-flex gap-2">
-                      <a class="btn btn-sm btn-outline-primary"
-                         href="{% url 'projects:edit' p.pk %}">
-                        Editar
-                      </a>
-                      <a class="btn btn-sm btn-outline-danger"
-                         href="{% url 'projects:delete' p.pk %}">
-                        Excluir
-                      </a>
-                    </div>
-                  {% endif %}
-
-                </div>
-              </div>
-            </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="alert alert-secondary">Nenhum projeto cadastrado.</div>
-      {% endif %}
-    </div>
-  </body>
-</html>
+{% block title %}Projects{% endblock %}
+{% block content %}
+<h1>Projects</h1>
+<p><a class="btn btn-primary" href="{% url 'project_create' %}">New project</a></p>
+<form method="get" class="mb-3">
+  <input type="text" name="q" value="{{ request.GET.q }}" placeholder="Search..." />
+  <button class="btn btn-secondary">Search</button>
+</form>
+<table class="table table-sm">
+  <thead><tr><th>Name</th><th>Methodology</th><th>Repo</th><th>Owner</th><th></th></tr></thead>
+  <tbody>
+    {% for p in projects %}
+      <tr>
+        <td>{{ p.name }}</td>
+        <td>{{ p.get_methodology_display }}</td>
+        <td>{% if p.gitea_repo_url %}<a href="{{ p.gitea_repo_url }}" target="_blank">{{ p.repo_name }}</a>{% else %}—{% endif %}</td>
+        <td>{{ p.repo_owner }}</td>
+        <td><a class="btn btn-outline-primary btn-sm" href="{% url 'project_members' p.pk %}">Members</a></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5">No projects found.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

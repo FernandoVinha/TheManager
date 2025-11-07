@@ -1,4 +1,3 @@
-# projects/apps.py
 from django.apps import AppConfig
 
 class ProjectsConfig(AppConfig):
@@ -6,4 +5,4 @@ class ProjectsConfig(AppConfig):
     name = "projects"
 
     def ready(self):
-        from . import signals  # <- carrega os signals
+        from . import signals  # register signal handlers
