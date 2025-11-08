@@ -20,19 +20,27 @@ class Project(models.Model):
     description = models.TextField(blank=True)
     owner = models.ForeignKey(User, on_delete=models.PROTECT, related_name="owned_projects")
 
-    # Gitea repo settings
-    repo_owner = models.CharField(max_length=120, help_text="User or organization that will own the repo in Gitea")
-    repo_name = models.CharField(max_length=120, blank=True, help_text="Repository name in Gitea (defaults to project name)")
+    # ✅ NOVO CAMPO — miniatura/ícone/banner do projeto
+    image = models.ImageField(
+        upload_to="projects/",
+        null=True,
+        blank=True,
+        help_text="Thumbnail / cover image for the project (optional)"
+    )
+
+    # Gitea settings …
+    repo_owner = models.CharField(max_length=120)
+    repo_name = models.CharField(max_length=120, blank=True)
     visibility = models.CharField(max_length=12, choices=Visibility.choices, default=Visibility.PRIVATE)
     default_branch = models.CharField(max_length=64, default="main")
-    auto_init = models.BooleanField(default=True, help_text="Create initial README in the repo")
+    auto_init = models.BooleanField(default=True)
     gitea_repo_url = models.URLField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # Practical toggles for different methodologies
-    sprint_length_days = models.PositiveIntegerField(default=14, help_text="Sprint length (Scrum)")
-    wip_limit = models.PositiveIntegerField(default=3, help_text="Default WIP per column (Kanban)")
-    xp_pair_programming = models.BooleanField(default=True, help_text="Prefer pair programming (XP)")
+    # Methodology toggles
+    sprint_length_days = models.PositiveIntegerField(default=14)
+    wip_limit = models.PositiveIntegerField(default=3)
+    xp_pair_programming = models.BooleanField(default=True)
 
     def __str__(self):
         return self.name

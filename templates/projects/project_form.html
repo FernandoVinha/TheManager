@@ -1,10 +1,240 @@
-{% extends "base.html" %}
-{% block title %}New Project{% endblock %}
+{% extends "base_sidebar.html" %}
+{% load static %}
+
+{% block title %}{{ view.object|default:"New Project" }}{% endblock %}
+
 {% block content %}
-<h1>New Project</h1>
-<form method="post">{% csrf_token %}
-  {{ form.as_p }}
-  <button class="btn btn-primary">Save</button>
-  <a class="btn btn-secondary" href="{% url 'project_list' %}">Cancel</a>
-</form>
+<div class="mx-auto" style="max-width: 980px;">
+  <div class="og-card p-4">
+
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h1 class="h5 m-0">{{ view.object|default:"New Project" }}</h1>
+      <a href="{% url 'project_list' %}" class="btn btn-outline-secondary btn-sm">Back to list</a>
+    </div>
+
+    {% if form.non_field_errors %}
+      <div class="alert alert-warning py-2 mb-3">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" novalidate>
+      {% csrf_token %}
+
+      <div class="row g-3">
+        <!-- NAME -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="text"
+                   class="form-control{% if form.name.errors %} is-invalid{% endif %}"
+                   id="{{ form.name.id_for_label }}"
+                   name="{{ form.name.html_name }}"
+                   value="{{ form.name.value|default_if_none:'' }}"
+                   placeholder="Project name" required>
+            <label for="{{ form.name.id_for_label }}">Project name</label>
+            {% if form.name.errors %}<div class="invalid-feedback d-block">{{ form.name.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+
+        <!-- KEY (slug) -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="text"
+                   class="form-control{% if form.key.errors %} is-invalid{% endif %}"
+                   id="{{ form.key.id_for_label }}"
+                   name="{{ form.key.html_name }}"
+                   value="{{ form.key.value|default_if_none:'' }}"
+                   placeholder="short-key" required>
+            <label for="{{ form.key.id_for_label }}">Key (slug)</label>
+            {% if form.key.errors %}<div class="invalid-feedback d-block">{{ form.key.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+
+        <!-- METHODOLOGY -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            {% with current=form.methodology.value|stringformat:'s' %}
+              <select class="form-select{% if form.methodology.errors %} is-invalid{% endif %}"
+                      id="{{ form.methodology.id_for_label }}"
+                      name="{{ form.methodology.html_name }}">
+                {% for val,label in form.methodology.field.choices %}
+                  {% with v=val|stringformat:'s' %}
+                    <option value="{{ val }}" {% if current == v %}selected{% endif %}>{{ label }}</option>
+                  {% endwith %}
+                {% endfor %}
+              </select>
+            {% endwith %}
+            <label for="{{ form.methodology.id_for_label }}">Methodology</label>
+            {% if form.methodology.errors %}<div class="invalid-feedback d-block">{{ form.methodology.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+
+        <!-- VISIBILITY -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            {% with current=form.visibility.value|stringformat:'s' %}
+              <select class="form-select{% if form.visibility.errors %} is-invalid{% endif %}"
+                      id="{{ form.visibility.id_for_label }}"
+                      name="{{ form.visibility.html_name }}">
+                {% for val,label in form.visibility.field.choices %}
+                  {% with v=val|stringformat:'s' %}
+                    <option value="{{ val }}" {% if current == v %}selected{% endif %}>{{ label }}</option>
+                  {% endwith %}
+                {% endfor %}
+              </select>
+            {% endwith %}
+            <label for="{{ form.visibility.id_for_label }}">Visibility</label>
+            {% if form.visibility.errors %}<div class="invalid-feedback d-block">{{ form.visibility.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+
+        <!-- DESCRIPTION -->
+        <div class="col-12">
+          <div class="form-floating">
+            <textarea class="form-control{% if form.description.errors %} is-invalid{% endif %}"
+                      id="{{ form.description.id_for_label }}"
+                      name="{{ form.description.html_name }}"
+                      placeholder="Description" style="height:120px">{{ form.description.value|default_if_none:'' }}</textarea>
+            <label for="{{ form.description.id_for_label }}">Description</label>
+            {% if form.description.errors %}<div class="invalid-feedback d-block">{{ form.description.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+
+        <!-- IMAGE -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="file"
+                   class="form-control{% if form.image.errors %} is-invalid{% endif %}"
+                   id="{{ form.image.id_for_label }}"
+                   name="{{ form.image.html_name }}"
+                   placeholder="Image">
+            <label for="{{ form.image.id_for_label }}">Project image</label>
+            {% if form.image.errors %}<div class="invalid-feedback d-block">{{ form.image.errors|striptags }}</div>{% endif %}
+            <div class="form-text">JPG/PNG/WebP/GIF (máx. 5 MB)</div>
+          </div>
+        </div>
+
+        <!-- DEFAULT BRANCH -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="text"
+                   class="form-control{% if form.default_branch.errors %} is-invalid{% endif %}"
+                   id="{{ form.default_branch.id_for_label }}"
+                   name="{{ form.default_branch.html_name }}"
+                   value="{{ form.default_branch.value|default_if_none:'main' }}"
+                   placeholder="main">
+            <label for="{{ form.default_branch.id_for_label }}">Default branch</label>
+            {% if form.default_branch.errors %}<div class="invalid-feedback d-block">{{ form.default_branch.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+
+        <!-- REPO OWNER -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="text"
+                   class="form-control{% if form.repo_owner.errors %} is-invalid{% endif %}"
+                   id="{{ form.repo_owner.id_for_label }}"
+                   name="{{ form.repo_owner.html_name }}"
+                   value="{{ form.repo_owner.value|default_if_none:'' }}"
+                   placeholder="gitea user/org" required>
+            <label for="{{ form.repo_owner.id_for_label }}">Repo owner (Gitea)</label>
+            {% if form.repo_owner.errors %}<div class="invalid-feedback d-block">{{ form.repo_owner.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+
+        <!-- REPO NAME -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="text"
+                   class="form-control{% if form.repo_name.errors %} is-invalid{% endif %}"
+                   id="{{ form.repo_name.id_for_label }}"
+                   name="{{ form.repo_name.html_name }}"
+                   value="{{ form.repo_name.value|default_if_none:'' }}"
+                   placeholder="(default = project name)">
+            <label for="{{ form.repo_name.id_for_label }}">Repo name</label>
+            {% if form.repo_name.errors %}<div class="invalid-feedback d-block">{{ form.repo_name.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+
+        <!-- AUTO INIT -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <select class="form-select{% if form.auto_init.errors %} is-invalid{% endif %}"
+                    id="{{ form.auto_init.id_for_label }}"
+                    name="{{ form.auto_init.html_name }}">
+              {% with v=form.auto_init.value %}
+                <option value="True" {% if v %}selected{% endif %}>Yes</option>
+                <option value="False" {% if not v %}selected{% endif %}>No</option>
+              {% endwith %}
+            </select>
+            <label for="{{ form.auto_init.id_for_label }}">Create initial README</label>
+            {% if form.auto_init.errors %}<div class="invalid-feedback d-block">{{ form.auto_init.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+
+        <!-- GITEA URL (readonly) -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="url"
+                   class="form-control"
+                   id="{{ form.gitea_repo_url.id_for_label }}"
+                   name="{{ form.gitea_repo_url.html_name }}"
+                   value="{{ form.gitea_repo_url.value|default_if_none:'' }}"
+                   placeholder="Gitea URL" readonly>
+            <label for="{{ form.gitea_repo_url.id_for_label }}">Gitea URL</label>
+          </div>
+          <div class="form-text">Filled automatically after repository creation.</div>
+        </div>
+
+        <!-- METHODOLOGY TOGGLES -->
+        <div class="col-md-4">
+          <div class="form-floating">
+            <input type="number"
+                   class="form-control{% if form.sprint_length_days.errors %} is-invalid{% endif %}"
+                   id="{{ form.sprint_length_days.id_for_label }}"
+                   name="{{ form.sprint_length_days.html_name }}"
+                   value="{{ form.sprint_length_days.value|default_if_none:14 }}"
+                   placeholder="Sprint length">
+            <label for="{{ form.sprint_length_days.id_for_label }}">Sprint length (days)</label>
+            {% if form.sprint_length_days.errors %}<div class="invalid-feedback d-block">{{ form.sprint_length_days.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <div class="form-floating">
+            <input type="number"
+                   class="form-control{% if form.wip_limit.errors %} is-invalid{% endif %}"
+                   id="{{ form.wip_limit.id_for_label }}"
+                   name="{{ form.wip_limit.html_name }}"
+                   value="{{ form.wip_limit.value|default_if_none:3 }}"
+                   placeholder="WIP">
+            <label for="{{ form.wip_limit.id_for_label }}">WIP limit</label>
+            {% if form.wip_limit.errors %}<div class="invalid-feedback d-block">{{ form.wip_limit.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <div class="form-floating">
+            <select class="form-select{% if form.xp_pair_programming.errors %} is-invalid{% endif %}"
+                    id="{{ form.xp_pair_programming.id_for_label }}"
+                    name="{{ form.xp_pair_programming.html_name }}">
+              {% with v=form.xp_pair_programming.value %}
+                <option value="True" {% if v %}selected{% endif %}>Yes</option>
+                <option value="False" {% if not v %}selected{% endif %}>No</option>
+              {% endwith %}
+            </select>
+            <label for="{{ form.xp_pair_programming.id_for_label }}">Pair programming</label>
+            {% if form.xp_pair_programming.errors %}<div class="invalid-feedback d-block">{{ form.xp_pair_programming.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-end mt-4 gap-2">
+        <a href="{% url 'project_list' %}" class="btn btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+
+  </div>
+</div>
 {% endblock %}

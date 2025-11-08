@@ -1,0 +1,73 @@
+{% extends "base_sidebar.html" %}
+{% load static %}
+
+{% block title %}Project — {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-12 col-lg-8">
+    <div class="card shadow-sm">
+      {% if project.image %}
+        <img src="{{ project.image.url }}" class="card-img-top" alt="{{ project.name }}" style="object-fit:cover; max-height:300px;">
+      {% endif %}
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <h3 class="mb-1">{{ project.name }}</h3>
+          <span class="badge {% if project.visibility == 'public' %}text-bg-success{% else %}text-bg-secondary{% endif %}">
+            {{ project.get_visibility_display }}
+          </span>
+        </div>
+        <p class="text-muted small mb-2">{{ project.key }} · {{ project.get_methodology_display }}</p>
+        <p class="mb-3">{{ project.description|default:"(no description)" }}</p>
+
+        {% if project.gitea_repo_url %}
+          <a class="btn btn-outline-secondary btn-sm" href="{{ project.gitea_repo_url }}" target="_blank" rel="noopener">
+            Open in Gitea
+          </a>
+        {% endif %}
+      </div>
+      <div class="card-footer">
+        <small class="text-muted">Owner: {{ project.owner.get_username|default:project.owner }}</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-sm mb-3">
+      <div class="card-header">Info</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-5">Branch</dt><dd class="col-7">{{ project.default_branch }}</dd>
+          <dt class="col-5">Repo owner</dt><dd class="col-7">{{ project.repo_owner }}</dd>
+          <dt class="col-5">Repo name</dt><dd class="col-7">{{ project.repo_name }}</dd>
+          <dt class="col-5">Sprints (days)</dt><dd class="col-7">{{ project.sprint_length_days }}</dd>
+          <dt class="col-5">WIP limit</dt><dd class="col-7">{{ project.wip_limit }}</dd>
+          <dt class="col-5">Pair prog.</dt><dd class="col-7">{{ project.xp_pair_programming|yesno:"Yes,No" }}</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-header">Members</div>
+      <ul class="list-group list-group-flush">
+        {% for m in project.memberships.all %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span>{{ m.user.get_username }}</span>
+            <span class="badge text-bg-secondary">{{ m.get_role_display }}</span>
+          </li>
+        {% empty %}
+          <li class="list-group-item text-muted">No members.</li>
+        {% endfor %}
+      </ul>
+
+      {% if U and U.can_manage_projects %}
+        <div class="card-footer d-flex gap-2">
+          <a class="btn btn-sm btn-outline-primary" href="{% url 'project_edit' project.pk %}">Edit</a>
+          <a class="btn btn-sm btn-outline-warning" href="{% url 'project_members' project.pk %}">Manage members</a>
+          <a class="btn btn-sm btn-outline-danger" href="{% url 'project_delete' project.pk %}">Delete</a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

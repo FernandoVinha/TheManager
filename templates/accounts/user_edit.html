@@ -1,0 +1,299 @@
+{% extends "base_sidebar.html" %}
+{% load static %}
+
+{% block title %}Edit User{% endblock %}
+
+{% block content %}
+<div class="mx-auto" style="max-width: 900px;">
+  <div class="og-card p-4">
+
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h1 class="h5 m-0">Edit User</h1>
+      <a href="{% url 'gitea_users' %}" class="btn btn-outline-secondary btn-sm">Back to list</a>
+    </div>
+
+    {% if form.non_field_errors %}
+      <div class="alert alert-warning py-2 mb-3">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      <div class="row g-3">
+        <!-- First name -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="text"
+                   class="form-control{% if form.first_name.errors %} is-invalid{% endif %}"
+                   id="{{ form.first_name.id_for_label }}"
+                   name="{{ form.first_name.html_name }}"
+                   value="{{ form.first_name.value|default_if_none:'' }}"
+                   placeholder="First name">
+            <label for="{{ form.first_name.id_for_label }}">First name</label>
+            {% if form.first_name.errors %}
+              <div class="invalid-feedback d-block">{{ form.first_name.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Last name -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="text"
+                   class="form-control{% if form.last_name.errors %} is-invalid{% endif %}"
+                   id="{{ form.last_name.id_for_label }}"
+                   name="{{ form.last_name.html_name }}"
+                   value="{{ form.last_name.value|default_if_none:'' }}"
+                   placeholder="Last name">
+            <label for="{{ form.last_name.id_for_label }}">Last name</label>
+            {% if form.last_name.errors %}
+              <div class="invalid-feedback d-block">{{ form.last_name.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Email -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="email"
+                   class="form-control{% if form.email.errors %} is-invalid{% endif %}"
+                   id="{{ form.email.id_for_label }}"
+                   name="{{ form.email.html_name }}"
+                   value="{{ form.email.value|default_if_none:'' }}"
+                   placeholder="user@example.com">
+            <label for="{{ form.email.id_for_label }}">Email</label>
+            {% if form.email.errors %}
+              <div class="invalid-feedback d-block">{{ form.email.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Is Active -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            {% with current=form.is_active.value|stringformat:'s' %}
+              <select class="form-select{% if form.is_active.errors %} is-invalid{% endif %}"
+                      id="{{ form.is_active.id_for_label }}"
+                      name="{{ form.is_active.html_name }}">
+                {% for val,label in form.is_active.field.choices %}
+                  {% with v=val|stringformat:'s' %}
+                    <option value="{{ val }}" {% if current == v %}selected{% endif %}>{{ label }}</option>
+                  {% endwith %}
+                {% endfor %}
+              </select>
+            {% endwith %}
+            <label for="{{ form.is_active.id_for_label }}">Active</label>
+            {% if form.is_active.errors %}
+              <div class="invalid-feedback d-block">{{ form.is_active.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Role -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            {% with current=form.role.value|stringformat:'s' %}
+              <select class="form-select{% if form.role.errors %} is-invalid{% endif %}"
+                      id="{{ form.role.id_for_label }}"
+                      name="{{ form.role.html_name }}">
+                {% for val,label in form.role.field.choices %}
+                  {% with v=val|stringformat:'s' %}
+                    <option value="{{ val }}" {% if current == v %}selected{% endif %}>{{ label }}</option>
+                  {% endwith %}
+                {% endfor %}
+              </select>
+            {% endwith %}
+            <label for="{{ form.role.id_for_label }}">Role</label>
+            {% if form.role.errors %}
+              <div class="invalid-feedback d-block">{{ form.role.errors|striptags }}</div>
+            {% endif %}
+          </div>
+          <div class="form-text mt-1">Managers cannot assign Admin role.</div>
+        </div>
+
+        <!-- Gitea full name -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="text"
+                   class="form-control{% if form.gitea_full_name.errors %} is-invalid{% endif %}"
+                   id="{{ form.gitea_full_name.id_for_label }}"
+                   name="{{ form.gitea_full_name.html_name }}"
+                   value="{{ form.gitea_full_name.value|default_if_none:'' }}"
+                   placeholder="Full name (Gitea)">
+            <label for="{{ form.gitea_full_name.id_for_label }}">Full name (Gitea)</label>
+            {% if form.gitea_full_name.errors %}
+              <div class="invalid-feedback d-block">{{ form.gitea_full_name.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Gitea website -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="url"
+                   class="form-control{% if form.gitea_website.errors %} is-invalid{% endif %}"
+                   id="{{ form.gitea_website.id_for_label }}"
+                   name="{{ form.gitea_website.html_name }}"
+                   value="{{ form.gitea_website.value|default_if_none:'' }}"
+                   placeholder="https://...">
+            <label for="{{ form.gitea_website.id_for_label }}">Website (Gitea)</label>
+            {% if form.gitea_website.errors %}
+              <div class="invalid-feedback d-block">{{ form.gitea_website.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Gitea location -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="text"
+                   class="form-control{% if form.gitea_location.errors %} is-invalid{% endif %}"
+                   id="{{ form.gitea_location.id_for_label }}"
+                   name="{{ form.gitea_location.html_name }}"
+                   value="{{ form.gitea_location.value|default_if_none:'' }}"
+                   placeholder="City, Country">
+            <label for="{{ form.gitea_location.id_for_label }}">Location (Gitea)</label>
+            {% if form.gitea_location.errors %}
+              <div class="invalid-feedback d-block">{{ form.gitea_location.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Gitea description -->
+        <div class="col-12">
+          <div class="form-floating">
+            <textarea
+              class="form-control{% if form.gitea_description.errors %} is-invalid{% endif %}"
+              id="{{ form.gitea_description.id_for_label }}"
+              name="{{ form.gitea_description.html_name }}"
+              placeholder="Bio/description"
+              style="height: 120px"
+            >{{ form.gitea_description.value|default_if_none:'' }}</textarea>
+            <label for="{{ form.gitea_description.id_for_label }}">Description (Gitea)</label>
+            {% if form.gitea_description.errors %}
+              <div class="invalid-feedback d-block">{{ form.gitea_description.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Gitea visibility -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            {% with current=form.gitea_visibility.value|stringformat:'s' %}
+              <select
+                class="form-select{% if form.gitea_visibility.errors %} is-invalid{% endif %}"
+                id="{{ form.gitea_visibility.id_for_label }}"
+                name="{{ form.gitea_visibility.html_name }}"
+              >
+                <option value="" {% if not current %}selected{% endif %}></option>
+                {% for val,label in form.gitea_visibility.field.choices %}
+                  {% with v=val|stringformat:'s' %}
+                    <option value="{{ val }}" {% if current == v %}selected{% endif %}>{{ label }}</option>
+                  {% endwith %}
+                {% endfor %}
+              </select>
+            {% endwith %}
+            <label for="{{ form.gitea_visibility.id_for_label }}">Gitea visibility</label>
+            {% if form.gitea_visibility.errors %}
+              <div class="invalid-feedback d-block">{{ form.gitea_visibility.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Gitea flags (checkboxes) -->
+        <div class="col-md-6">
+          <div class="og-card p-3">
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="checkbox"
+                     id="{{ form.gitea_allow_create_organization.id_for_label }}"
+                     name="{{ form.gitea_allow_create_organization.html_name }}"
+                     {% if form.gitea_allow_create_organization.value %}checked{% endif %}>
+              <label class="form-check-label" for="{{ form.gitea_allow_create_organization.id_for_label }}">
+                Allow create organization
+              </label>
+              {% if form.gitea_allow_create_organization.errors %}
+                <div class="text-danger small">{{ form.gitea_allow_create_organization.errors|striptags }}</div>
+              {% endif %}
+            </div>
+
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="checkbox"
+                     id="{{ form.gitea_allow_git_hook.id_for_label }}"
+                     name="{{ form.gitea_allow_git_hook.html_name }}"
+                     {% if form.gitea_allow_git_hook.value %}checked{% endif %}>
+              <label class="form-check-label" for="{{ form.gitea_allow_git_hook.id_for_label }}">
+                Allow git hook
+              </label>
+              {% if form.gitea_allow_git_hook.errors %}
+                <div class="text-danger small">{{ form.gitea_allow_git_hook.errors|striptags }}</div>
+              {% endif %}
+            </div>
+
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="checkbox"
+                     id="{{ form.gitea_allow_import_local.id_for_label }}"
+                     name="{{ form.gitea_allow_import_local.html_name }}"
+                     {% if form.gitea_allow_import_local.value %}checked{% endif %}>
+              <label class="form-check-label" for="{{ form.gitea_allow_import_local.id_for_label }}">
+                Allow import local
+              </label>
+              {% if form.gitea_allow_import_local.errors %}
+                <div class="text-danger small">{{ form.gitea_allow_import_local.errors|striptags }}</div>
+              {% endif %}
+            </div>
+
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="checkbox"
+                     id="{{ form.gitea_restricted.id_for_label }}"
+                     name="{{ form.gitea_restricted.html_name }}"
+                     {% if form.gitea_restricted.value %}checked{% endif %}>
+              <label class="form-check-label" for="{{ form.gitea_restricted.id_for_label }}">
+                Restricted
+              </label>
+              {% if form.gitea_restricted.errors %}
+                <div class="text-danger small">{{ form.gitea_restricted.errors|striptags }}</div>
+              {% endif %}
+            </div>
+
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox"
+                     id="{{ form.gitea_prohibit_login.id_for_label }}"
+                     name="{{ form.gitea_prohibit_login.html_name }}"
+                     {% if form.gitea_prohibit_login.value %}checked{% endif %}>
+              <label class="form-check-label" for="{{ form.gitea_prohibit_login.id_for_label }}">
+                Prohibit login
+              </label>
+              {% if form.gitea_prohibit_login.errors %}
+                <div class="text-danger small">{{ form.gitea_prohibit_login.errors|striptags }}</div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Max repo creation -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="number"
+                   class="form-control{% if form.gitea_max_repo_creation.errors %} is-invalid{% endif %}"
+                   id="{{ form.gitea_max_repo_creation.id_for_label }}"
+                   name="{{ form.gitea_max_repo_creation.html_name }}"
+                   value="{{ form.gitea_max_repo_creation.value|default_if_none:'' }}"
+                   placeholder="Max repos">
+            <label for="{{ form.gitea_max_repo_creation.id_for_label }}">Max repo creation</label>
+            {% if form.gitea_max_repo_creation.errors %}
+              <div class="invalid-feedback d-block">{{ form.gitea_max_repo_creation.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+      </div>
+
+      <div class="d-flex justify-content-end mt-4 gap-2">
+        <a href="{% url 'gitea_users' %}" class="btn btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Save changes</button>
+      </div>
+    </form>
+
+  </div>
+</div>
+{% endblock %}

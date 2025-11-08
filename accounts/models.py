@@ -1,3 +1,4 @@
+# accounts/models.py
 from __future__ import annotations
 
 from django.contrib.auth.models import AbstractUser
@@ -8,10 +9,10 @@ from django.utils.crypto import get_random_string
 
 class User(AbstractUser):
     """
-    Custom user model with:
-    - Role hierarchy for project administration
-    - Gitea integration fields
-    - Convenience permission helpers
+    Custom user model com:
+    - Hierarquia de papeis (role)
+    - Campos de integração com Gitea (espelho de preferências/perfil)
+    - Helpers de permissão que consideram 'role' e 'is_superuser'
     """
 
     # =========================
@@ -31,7 +32,7 @@ class User(AbstractUser):
         (ROLE_JUNIOR,  "Junior"),
     ]
 
-    # override email → unique
+    # e-mail único (substitui o email padrão do AbstractUser)
     email = models.EmailField("email address", unique=True)
 
     role = models.CharField(
@@ -39,21 +40,25 @@ class User(AbstractUser):
         choices=ROLE_CHOICES,
         default=ROLE_REGULAR,
         help_text="Controls allowed actions inside the system.",
+        db_index=True,
     )
 
     # =========================
-    # Gitea integration
+    # Gitea integration (perfil e preferências)
     # =========================
     gitea_id = models.PositiveIntegerField(
         null=True, blank=True,
         help_text="User ID in Gitea",
     )
     gitea_avatar_url = models.URLField(null=True, blank=True)
+
+    # Guarda a base URL do Gitea usada na sincronização (útil para multi-ambiente)
     gitea_url = models.URLField(
         null=True, blank=True,
         help_text="Gitea base URL used for automatic sync",
     )
 
+    # Timestamp local para rastrear quando espelhamos senha no Gitea
     password_updated_at = models.DateTimeField(null=True, blank=True)
 
     gitea_max_repo_creation = models.IntegerField(
@@ -73,12 +78,14 @@ class User(AbstractUser):
         help_text="Gitea profile visibility",
     )
 
-    gitea_allow_create_organization = models.BooleanField(default=None, null=True, blank=True)
-    gitea_allow_git_hook = models.BooleanField(default=None, null=True, blank=True)
-    gitea_allow_import_local = models.BooleanField(default=None, null=True, blank=True)
-    gitea_restricted = models.BooleanField(default=None, null=True, blank=True)
-    gitea_prohibit_login = models.BooleanField(default=None, null=True, blank=True)
+    # Flags de preferência/limitação no Gitea
+    gitea_allow_create_organization = models.BooleanField(null=True, blank=True, default=None)
+    gitea_allow_git_hook = models.BooleanField(null=True, blank=True, default=None)
+    gitea_allow_import_local = models.BooleanField(null=True, blank=True, default=None)
+    gitea_restricted = models.BooleanField(null=True, blank=True, default=None)
+    gitea_prohibit_login = models.BooleanField(null=True, blank=True, default=None)
 
+    # Campos de perfil do Gitea
     gitea_full_name = models.CharField(max_length=255, null=True, blank=True)
     gitea_website = models.URLField(null=True, blank=True)
     gitea_location = models.CharField(max_length=255, null=True, blank=True)
@@ -92,9 +99,7 @@ class User(AbstractUser):
 
     @property
     def display_name(self) -> str:
-        """
-        Returns best available display label.
-        """
+        """Melhor rótulo disponível para exibição."""
         return self.get_full_name() or self.username or self.email
 
     # --------- simple role checks ---------
@@ -114,30 +119,43 @@ class User(AbstractUser):
         return self.role == self.ROLE_JUNIOR
 
     # =========================
-    # Permission helpers
+    # Permission helpers (consideram is_superuser)
     # =========================
     @property
     def can_manage_users(self) -> bool:
         """
-        Admin + Manager may create/edit users (except only Admin can create Admin accounts).
+        Admin + Manager podem gerenciar usuários.
+        Superuser SEMPRE pode.
         """
-        return self.is_admin() or self.is_manager()
+        return self.is_superuser or self.is_admin() or self.is_manager()
 
     @property
     def can_delete_users(self) -> bool:
-        return self.is_admin()
+        """
+        Remoção de usuários: apenas Admin… mas superuser SEMPRE pode.
+        """
+        return self.is_superuser or self.is_admin()
 
     @property
     def can_create_projects(self) -> bool:
-        return self.is_admin() or self.is_manager()
+        return self.is_superuser or self.is_admin() or self.is_manager()
 
     @property
     def can_manage_projects(self) -> bool:
-        return self.is_admin() or self.is_manager()
+        return self.is_superuser or self.is_admin() or self.is_manager()
 
     @property
     def can_edit_self(self) -> bool:
         return True
+
+    # Normalização antes de salvar (e-mail sempre lower/strip)
+    def save(self, *args, **kwargs):
+        if self.email:
+            self.email = self.email.strip().lower()
+        # Se desejar, descomente para forçar username minúsculo:
+        # if self.username:
+        #     self.username = self.username.strip().lower()
+        return super().save(*args, **kwargs)
 
     class Meta:
         verbose_name = "User"
@@ -146,15 +164,15 @@ class User(AbstractUser):
 
 
 # ======================================================
-# User Invite Token
+# User Invite Token (ativação e reset por link único)
 # ======================================================
 class UserInvite(models.Model):
     """
-    One-time token allowing an invited user to set password & activate account.
-    Typical flow:
-      - Manager/Admin creates User (inactive, unusable password)
-      - Create invite token → email it
-      - User opens link, sets password → account becomes active → token deleted
+    Token one-time para permitir que um usuário convidado defina a senha e ative a conta.
+    Fluxo típico:
+      - Admin/Manager cria User (inativo, senha inutilizável)
+      - Cria-se o token de convite → envia por e-mail (ou copia o link)
+      - Usuário abre o link, define a senha → conta ativa → token é consumido (deletado)
     """
 
     user = models.OneToOneField(
@@ -170,7 +188,7 @@ class UserInvite(models.Model):
     )
     created_at = models.DateTimeField(default=timezone.now)
 
-    # Optional: expiration
+    # Expiração opcional do token
     expires_at = models.DateTimeField(
         null=True, blank=True,
         help_text="If defined, tokens beyond this point are invalid.",
@@ -183,10 +201,9 @@ class UserInvite(models.Model):
     @staticmethod
     def create_for_user(user: User, *, validity_days: int | None = 7) -> "UserInvite":
         """
-        Static constructor — creates a new token for this user;
-        replacing older one if necessary.
+        Cria (ou substitui) um token novo para o usuário informado.
         """
-        # ensure only one invite exists
+        # Garante existir só um token por usuário
         UserInvite.objects.filter(user=user).delete()
 
         token = get_random_string(56)

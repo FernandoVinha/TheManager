@@ -1,0 +1,184 @@
+{% extends "base_sidebar.html" %}
+{% load static %}
+
+{% block title %}Create User{% endblock %}
+
+{% block content %}
+<div class="mx-auto" style="max-width: 800px;">
+  <div class="og-card p-4">
+
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h1 class="h5 m-0">Create User</h1>
+      <a href="{% url 'gitea_users' %}" class="btn btn-outline-secondary btn-sm">Back to list</a>
+    </div>
+
+    {# Mensagens de erro gerais do form #}
+    {% if form.non_field_errors %}
+      <div class="alert alert-warning py-2 mb-3">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      <div class="row g-3">
+
+        {# FIRST NAME #}
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input
+              type="text"
+              class="form-control{% if form.first_name.errors %} is-invalid{% endif %}"
+              id="{{ form.first_name.id_for_label }}"
+              name="{{ form.first_name.html_name }}"
+              value="{{ form.first_name.value|default_if_none:'' }}"
+              placeholder="First name"
+            >
+            <label for="{{ form.first_name.id_for_label }}">First name</label>
+            {% if form.first_name.errors %}
+              <div class="invalid-feedback d-block">
+                {{ form.first_name.errors|striptags }}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        {# LAST NAME #}
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input
+              type="text"
+              class="form-control{% if form.last_name.errors %} is-invalid{% endif %}"
+              id="{{ form.last_name.id_for_label }}"
+              name="{{ form.last_name.html_name }}"
+              value="{{ form.last_name.value|default_if_none:'' }}"
+              placeholder="Last name"
+            >
+            <label for="{{ form.last_name.id_for_label }}">Last name</label>
+            {% if form.last_name.errors %}
+              <div class="invalid-feedback d-block">
+                {{ form.last_name.errors|striptags }}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        {# EMAIL #}
+        <div class="col-12">
+          <div class="form-floating">
+            <input
+              type="email"
+              class="form-control{% if form.email.errors %} is-invalid{% endif %}"
+              id="{{ form.email.id_for_label }}"
+              name="{{ form.email.html_name }}"
+              value="{{ form.email.value|default_if_none:'' }}"
+              placeholder="user@example.com"
+              required
+            >
+            <label for="{{ form.email.id_for_label }}">Email</label>
+            {% if form.email.errors %}
+              <div class="invalid-feedback d-block">
+                {{ form.email.errors|striptags }}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        {# ROLE #}
+        <div class="col-12">
+          <div class="form-floating">
+            {% with current=form.role.value|stringformat:'s' %}
+              <select
+                class="form-select{% if form.role.errors %} is-invalid{% endif %}"
+                id="{{ form.role.id_for_label }}"
+                name="{{ form.role.html_name }}"
+              >
+                {% for val,label in form.role.field.choices %}
+                  {% with v=val|stringformat:'s' %}
+                    <option value="{{ val }}" {% if current == v %}selected{% endif %}>{{ label }}</option>
+                  {% endwith %}
+                {% endfor %}
+              </select>
+            {% endwith %}
+            <label for="{{ form.role.id_for_label }}">Role</label>
+            {% if form.role.errors %}
+              <div class="invalid-feedback d-block">
+                {{ form.role.errors|striptags }}
+              </div>
+            {% endif %}
+          </div>
+          <div class="form-text mt-1">
+            Managers <strong>cannot</strong> create Admin users.
+          </div>
+        </div>
+
+        {# GITEA FULL NAME #}
+        <div class="col-12">
+          <div class="form-floating">
+            <input
+              type="text"
+              class="form-control{% if form.gitea_full_name.errors %} is-invalid{% endif %}"
+              id="{{ form.gitea_full_name.id_for_label }}"
+              name="{{ form.gitea_full_name.html_name }}"
+              value="{{ form.gitea_full_name.value|default_if_none:'' }}"
+              placeholder="Full name (Gitea)"
+            >
+            <label for="{{ form.gitea_full_name.id_for_label }}">Full name (Gitea)</label>
+            {% if form.gitea_full_name.errors %}
+              <div class="invalid-feedback d-block">
+                {{ form.gitea_full_name.errors|striptags }}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        {# GITEA VISIBILITY #}
+        <div class="col-12">
+          <div class="form-floating">
+            {% with current=form.gitea_visibility.value|stringformat:'s' %}
+              <select
+                class="form-select{% if form.gitea_visibility.errors %} is-invalid{% endif %}"
+                id="{{ form.gitea_visibility.id_for_label }}"
+                name="{{ form.gitea_visibility.html_name }}"
+              >
+                {# Inclui opção vazia se o campo permite blank #}
+                {% if form.gitea_visibility.field.blank or form.gitea_visibility.field.required == False %}
+                  <option value="" {% if not current %}selected{% endif %}></option>
+                {% endif %}
+                {% for val,label in form.gitea_visibility.field.choices %}
+                  {% with v=val|stringformat:'s' %}
+                    <option value="{{ val }}" {% if current == v %}selected{% endif %}>{{ label }}</option>
+                  {% endwith %}
+                {% endfor %}
+              </select>
+            {% endwith %}
+            <label for="{{ form.gitea_visibility.id_for_label }}">Gitea visibility</label>
+            {% if form.gitea_visibility.errors %}
+              <div class="invalid-feedback d-block">
+                {{ form.gitea_visibility.errors|striptags }}
+              </div>
+            {% endif %}
+          </div>
+          <div class="form-text mt-1">
+            Controls how the user profile is shown inside Gitea.
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-end mt-4 gap-2">
+        <a href="{% url 'gitea_users' %}" class="btn btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Create user</button>
+      </div>
+    </form>
+
+    <hr class="my-4"/>
+
+    <div class="small text-muted">
+      After creation, the user will receive a one-time link to set the password.
+      If SMTP is not configured, you’ll get a copyable link on the next screen.
+    </div>
+
+  </div>
+</div>
+{% endblock %}

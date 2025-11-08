@@ -1,10 +1,12 @@
+# accounts/views.py
 from __future__ import annotations
 
 from typing import Optional
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import login
+from django.contrib.auth import get_user_model
+from django.contrib.auth import login, logout
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView
 from django.http import (
@@ -16,8 +18,14 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
+from django.views.generic.edit import UpdateView
 
-from .forms import UserCreateForm, PasswordSetupForm
+from .forms import (
+    UserCreateForm,
+    PasswordSetupForm,
+    SelfProfileForm,
+    AdminUserForm,
+)
 from .models import User, UserInvite
 from .services import gitea as gitea_api
 from .utils import send_reset_link_or_return
@@ -28,9 +36,7 @@ from .utils import send_reset_link_or_return
 # =========================================================
 
 def _safe_redirect(request: HttpRequest, default_name: str) -> HttpResponse:
-    """
-    Redirects to ?next= if safe (same host), otherwise to named URL.
-    """
+    """Redirects to ?next= if safe (same host), otherwise to named URL."""
     nxt = request.POST.get("next") or request.GET.get("next")
     if nxt and url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}):
         return redirect(nxt)
@@ -46,45 +52,73 @@ def _forbidden() -> HttpResponse:
 # =========================================================
 
 class SignInView(LoginView):
-    """
-    Simple username/password login. No self-signup.
-    """
+    """Simple username/password login. No self-signup."""
     template_name = "accounts/login.html"
     redirect_authenticated_user = True
 
     def get_success_url(self) -> str:
-        # After login, land on the Gitea users list by default
-        return reverse_lazy("gitea_users")
+        # Após login, cair na entrada inteligente de usuários por padrão
+        return reverse_lazy("users")
 
 
 class SignOutView(LoginRequiredMixin, View):
-    """
-    Logout strictly via POST to avoid CSRF-prone GET.
-    If GET is used, render a tiny confirmation with a POST form.
-    """
-    template_name_get = "accounts/logout_confirm.html"
-
+    """Logout compatível com GET/POST (de acordo com seu navbar)."""
     def post(self, request: HttpRequest) -> HttpResponse:
-        from django.contrib.auth import logout
         logout(request)
         messages.success(request, "You have been signed out.")
         return redirect(reverse("login"))
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        return render(request, self.template_name_get, {})
+        logout(request)
+        messages.success(request, "You have been signed out.")
+        return redirect(reverse("login"))
 
 
 # =========================================================
-# Gitea Users (read-only list pulled from Gitea API)
+# Users entry: envia para lista (admin/manager) ou perfil (demais)
+# =========================================================
+
+class UsersEntryView(LoginRequiredMixin, View):
+    """
+    /users/ → se admin/manager: lista de usuários
+            → caso contrário: página de edição do próprio perfil
+    """
+    def get(self, request: HttpRequest, *args, **kwargs):
+        if request.user.can_manage_users:
+            return redirect(reverse("gitea_users"))
+        return redirect(reverse("profile"))
+
+
+# =========================================================
+# Profile (self-edit) — usa SelfProfileForm
+# =========================================================
+
+class ProfileView(LoginRequiredMixin, UpdateView):
+    model = get_user_model()
+    template_name = "accounts/profile.html"
+    form_class = SelfProfileForm
+
+    def get_object(self, queryset=None):
+        return self.request.user
+
+    def get_success_url(self):
+        messages.success(self.request, "Profile updated.")
+        return reverse_lazy("profile")
+
+
+# =========================================================
+# Gitea Users (read-only list pulled from Gitea API) — admin/manager only
 # =========================================================
 
 class GiteaUserListView(LoginRequiredMixin, View):
-    """
-    Read-only list of users from Gitea (via your gitea_api service).
-    """
+    """Read-only list of users from Gitea (via gitea_api)."""
     template_name = "accounts/gitea_users.html"
 
     def get(self, request: HttpRequest) -> HttpResponse:
+        # Apenas admin/manager podem abrir a lista
+        if not (request.user.can_manage_users):
+            return redirect("profile")
+
         def to_int(val: Optional[str], default: int) -> int:
             try:
                 return int(val) if val is not None else default
@@ -110,6 +144,21 @@ class GiteaUserListView(LoginRequiredMixin, View):
             total = 0
             error = str(e)
 
+        # ===== NOVO: enriquecer com local_pk (id do User no Django), para ações CRUD locais =====
+        # Faz match por username (login) e, se não houver, por email.
+        for u in users:
+            login_name = (u.get("login") or "").strip()
+            email = (u.get("email") or "").strip().lower()
+
+            local = None
+            if login_name:
+                local = User.objects.filter(username__iexact=login_name).only("id").first()
+            if not local and email:
+                local = User.objects.filter(email__iexact=email).only("id").first()
+
+            u["local_pk"] = local.id if local else None
+        # ===== FIM DO BLOCO NOVO =====
+
         has_prev = page > 1
         has_next = (page * limit) < total if total else len(users) == limit
 
@@ -130,18 +179,10 @@ class GiteaUserListView(LoginRequiredMixin, View):
 
 
 # =========================================================
-# User Creation (Admin/Manager) → token email (or copy link)
+# User Creation (Admin/Manager) → token email (ou link copiável)
 # =========================================================
 
 class UserCreateView(LoginRequiredMixin, View):
-    """
-    Admin or Manager can create users.
-    Managers CANNOT create Admin users.
-    The new user is inactive with an unusable password.
-    We then create a one-time invite token and either:
-      - Send email (if SMTP configured), or
-      - Show a copyable link (fallback).
-    """
     template_name = "accounts/user_create.html"
     template_success_fallback = "accounts/user_create_success.html"
 
@@ -150,7 +191,7 @@ class UserCreateView(LoginRequiredMixin, View):
             return _forbidden()
 
         form = UserCreateForm()
-        form.request = request  # allow form to enforce manager cannot create admin
+        form.request = request  # validação de role (manager não cria admin)
         return render(request, self.template_name, {"form": form})
 
     def post(self, request: HttpRequest) -> HttpResponse:
@@ -162,17 +203,24 @@ class UserCreateView(LoginRequiredMixin, View):
         if not form.is_valid():
             return render(request, self.template_name, {"form": form})
 
-        # Build user in inactive state with unusable password
+        # Cria usuário inativo com senha inutilizável
         user: User = form.save(commit=False)
         user.is_active = False
-        user.username = user.username or user.email.split("@")[0]
+        # base de username a partir do email (garante unicidade)
+        base_username = (user.username or (user.email.split("@")[0]))
+        candidate = base_username
+        i = 1
+        while User.objects.filter(username=candidate).exists():
+            i += 1
+            candidate = f"{base_username}{i}"
+        user.username = candidate
         user.set_unusable_password()
         user.save()
 
-        # Create one-time invite token
+        # Token one-time
         invite = UserInvite.create_for_user(user)
 
-        # Try to send e-mail; if not configured, return link for copy
+        # Envia e-mail ou retorna link para copiar
         link = send_reset_link_or_return(user, invite.token, request)
         if link:
             return render(
@@ -186,14 +234,10 @@ class UserCreateView(LoginRequiredMixin, View):
 
 
 # =========================================================
-# Forgot Password (public for any user)
+# Forgot Password (público) — anti-enumeração
 # =========================================================
 
 class ForgotPasswordView(View):
-    """
-    Collects the user's email and sends the same token link used for activation.
-    If email isn't configured, shows a copyable link (for dev/demo).
-    """
     template_name = "accounts/forgot_password.html"
     template_done_copy = "accounts/forgot_password_done.html"
     template_done_sent = "accounts/forgot_password_sent.html"
@@ -206,22 +250,19 @@ class ForgotPasswordView(View):
         if not email:
             return render(request, self.template_name, {"error": "Email is required."})
 
-        try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            # You may prefer a generic message to avoid enumeration
-            return render(request, self.template_name, {"error": "No account found for this email."})
+        user = User.objects.filter(email=email).first()
+        if user:
+            invite = getattr(user, "invite", None)
+            if invite:
+                invite.delete()
+            invite = UserInvite.create_for_user(user)
 
-        invite = getattr(user, "invite", None)
-        # Replace any previous token for simplicity
-        if invite:
-            invite.delete()
-        invite = UserInvite.create_for_user(user)
+            link = send_reset_link_or_return(user, invite.token, request)
+            if link:
+                # sem e-mail configurado → mostra link copiável
+                return render(request, self.template_done_copy, {"reset_link": link})
 
-        link = send_reset_link_or_return(user, invite.token, request)
-        if link:
-            return render(request, self.template_done_copy, {"reset_link": link})
-
+        # sempre mostra "sent" para evitar enumeração
         return render(request, self.template_done_sent)
 
 
@@ -230,10 +271,6 @@ class ForgotPasswordView(View):
 # =========================================================
 
 class PasswordResetConfirmView(View):
-    """
-    Single form for both: new-user activation and password reset.
-    Uses the one-time token (UserInvite).
-    """
     template_name = "accounts/password_reset_confirm.html"
 
     def get(self, request: HttpRequest, token: str) -> HttpResponse:
@@ -242,7 +279,6 @@ class PasswordResetConfirmView(View):
             invite.delete()
             messages.error(request, "This link has expired. Please request a new one.")
             return redirect(reverse("forgot_password"))
-
         return render(request, self.template_name, {"form": PasswordSetupForm()})
 
     def post(self, request: HttpRequest, token: str) -> HttpResponse:
@@ -258,27 +294,21 @@ class PasswordResetConfirmView(View):
 
         user = invite.user
         user.set_password(form.cleaned_data["password1"])
-        user.is_active = True  # covers the new-user activation case
+        user.is_active = True  # cobre o caso de ativação
         user.save()
 
-        # Consume token (one-time)
-        invite.delete()
+        invite.delete()  # consome token
 
-        # Auto-login after setting password
         login(request, user)
         messages.success(request, "Password updated. Welcome!")
-        return _safe_redirect(request, default_name="gitea_users")
+        return _safe_redirect(request, default_name="users")
 
 
 # =========================================================
-# Optional: Resend invite (Admin/Manager)
+# Resend invite (Admin/Manager)
 # =========================================================
 
 class ResendInviteView(LoginRequiredMixin, View):
-    """
-    Regenerates a fresh token and re-sends the email (or shows link).
-    Managers cannot resend for Admin accounts (no escalation).
-    """
     template_name_copy = "accounts/user_create_success.html"
 
     def post(self, request: HttpRequest, user_id: int) -> HttpResponse:
@@ -287,12 +317,11 @@ class ResendInviteView(LoginRequiredMixin, View):
 
         target = get_object_or_404(User, pk=user_id)
 
-        # Managers cannot operate on Admin accounts
+        # Managers não operam em Admin
         if request.user.is_manager() and target.is_admin():
             messages.error(request, "Managers cannot resend admin invitations.")
             return _safe_redirect(request, default_name="gitea_users")
 
-        # Replace existing invite
         existing = getattr(target, "invite", None)
         if existing:
             existing.delete()
@@ -300,7 +329,6 @@ class ResendInviteView(LoginRequiredMixin, View):
 
         link = send_reset_link_or_return(target, invite.token, request)
         if link:
-            # show copy UI if email isn't configured
             messages.info(request, "Email is not configured. Copy this link and send it manually.")
             return render(
                 request,
@@ -312,6 +340,10 @@ class ResendInviteView(LoginRequiredMixin, View):
         return _safe_redirect(request, default_name="gitea_users")
 
 
+# =========================================================
+# Delete user (Django + Gitea handled by signal)
+# =========================================================
+
 class UserDeleteView(LoginRequiredMixin, View):
     def post(self, request: HttpRequest, user_id: int) -> HttpResponse:
         if not request.user.can_delete_users:
@@ -319,7 +351,7 @@ class UserDeleteView(LoginRequiredMixin, View):
 
         user = get_object_or_404(User, pk=user_id)
 
-        # don't allow deleting admins unless request.user is admin
+        # somente admin pode remover admin
         if user.is_admin() and not request.user.is_admin():
             messages.error(request, "Only admins can delete admin users.")
             return redirect("gitea_users")
@@ -327,8 +359,44 @@ class UserDeleteView(LoginRequiredMixin, View):
         user.delete()
         messages.success(request, "User deleted.")
         return redirect("gitea_users")
+
+
+# =========================================================
+# Admin/Manager editam qualquer usuário — usa AdminUserForm
+# =========================================================
+
+class UserEditView(LoginRequiredMixin, View):
+    template_name = "accounts/user_edit.html"
+
+    def get(self, request: HttpRequest, user_id: int) -> HttpResponse:
+        if not request.user.can_manage_users:
+            return HttpResponseForbidden("Forbidden")
+
+        target = get_object_or_404(User, pk=user_id)
+        form = AdminUserForm(instance=target, request=request)
+        return render(request, self.template_name, {"form": form, "target": target})
+
+    def post(self, request: HttpRequest, user_id: int) -> HttpResponse:
+        if not request.user.can_manage_users:
+            return HttpResponseForbidden("Forbidden")
+
+        target = get_object_or_404(User, pk=user_id)
+        form = AdminUserForm(request.POST, instance=target, request=request)
+
+        if not form.is_valid():
+            return render(request, self.template_name, {"form": form, "target": target})
+
+        form.save()
+        messages.success(request, "User updated.")
+        return redirect("gitea_users")
+
+
+# =========================================================
+# Simple dashboard placeholder
+# =========================================================
+
 class DashboardView(LoginRequiredMixin, View):
     template_name = "accounts/dashboard.html"
 
-    def get(self, request, *args, **kwargs):
+    def get(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
         return render(request, self.template_name)
