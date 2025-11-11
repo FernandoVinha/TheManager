@@ -1,25 +1,31 @@
-# tasck/views.py
 from __future__ import annotations
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
+from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.views import View
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 
 from projects.models import Project, ProjectMember
-from .models import Task, TaskMember, TaskMessage
-from .forms import TaskForm, TaskMemberForm, TaskMessageForm
+from .models import Task, TaskMember, TaskMessage, TaskCommit
+from .forms import (
+    TaskForm,
+    TaskMemberForm,
+    TaskMessageForm,
+    KanbanFilterForm,
+    TaskCommitReviewForm,
+)
 
 
-# ========= helpers de permissão =========
+# =========================
+# Helpers de permissão
+# =========================
 
 def _user_display_name(user) -> str:
-    # Usa a propriedade display_name do seu User customizado (accounts.User)
-    # Se não existir, cai para get_username()
     return getattr(user, "display_name", None) or user.get_username()
 
 def _user_is_project_member(user, project: Project) -> bool:
@@ -30,27 +36,21 @@ def _user_is_project_member(user, project: Project) -> bool:
     return ProjectMember.objects.filter(project=project, user=user).exists()
 
 def _user_can_view_project(user, project: Project) -> bool:
-    # Admin/manager sempre podem
     if getattr(user, "can_manage_projects", False):
         return True
-    # Owner ou membro do projeto podem ver
     return _user_is_project_member(user, project)
 
 def _user_can_edit_project(user, project: Project) -> bool:
-    # Admin/manager ou owner do projeto
     if getattr(user, "can_manage_projects", False):
         return True
     return project.owner_id == user.id
 
 
-# ========= Tasks =========
+# =========================
+# Tasks — CRUD + listagem
+# =========================
 
 class TaskListView(LoginRequiredMixin, ListView):
-    """
-    Lista tasks apenas dos projetos aos quais o usuário tem acesso:
-      - admin/manager: todas
-      - demais: projetos onde é owner ou membro
-    """
     model = Task
     template_name = "tasck/task_list.html"
     context_object_name = "tasks"
@@ -64,64 +64,91 @@ class TaskListView(LoginRequiredMixin, ListView):
         q = self.request.GET.get("q")
 
         if getattr(user, "can_manage_projects", False):
-            # admin/manager vê tudo
             if q:
-                qs = qs.filter(Q(title__icontains=q) | Q(description__icontains=q) | Q(project__name__icontains=q))
+                qs = qs.filter(
+                    Q(title__icontains=q) |
+                    Q(description__icontains=q) |
+                    Q(project__name__icontains=q) |
+                    Q(key__icontains=q)
+                )
             return qs.order_by("-created_at")
 
-        # demais: somente tasks de projetos onde é owner ou membro
         qs = qs.filter(
             Q(project__owner=user) |
             Q(project__memberships__user=user)
         ).distinct()
         if q:
-            qs = qs.filter(Q(title__icontains=q) | Q(description__icontains=q) | Q(project__name__icontains=q))
+            qs = qs.filter(
+                Q(title__icontains=q) |
+                Q(description__icontains=q) |
+                Q(project__name__icontains=q) |
+                Q(key__icontains=q)
+            )
         return qs.order_by("-created_at")
 
 
 class TaskCreateView(LoginRequiredMixin, CreateView):
-    """
-    Criação de task:
-      - Define reporter = usuário atual
-      - Valida que o usuário tem acesso ao projeto selecionado
-      - Fork do repo será tratado pelo signal após salvar
-    """
     model = Task
     form_class = TaskForm
     template_name = "tasck/task_form.html"
 
     def dispatch(self, request, *args, **kwargs):
-        # Se o form vier com project pré-selecionado por GET (?project=ID), validamos o acesso
+        """
+        Se vier ?project=ID, valida permissão e fixa o projeto.
+        """
+        self.fixed_project = None
         project_id = request.GET.get("project")
         if project_id:
             project = get_object_or_404(Project, pk=project_id)
             if not _user_can_view_project(request.user, project):
                 raise PermissionDenied("You cannot create tasks in this project.")
+            self.fixed_project = project
         return super().dispatch(request, *args, **kwargs)
 
+    def get_initial(self):
+        initial = super().get_initial()
+        if self.fixed_project:
+            initial["project"] = self.fixed_project.pk
+        return initial
+
+    def get_form_kwargs(self):
+        """
+        Passa o project para o form (para filtrar assignee aos membros).
+        """
+        kwargs = super().get_form_kwargs()
+        kwargs["project"] = self.fixed_project or kwargs.get("instance", None) and kwargs["instance"].project
+        return kwargs
+
+    def get_form(self, form_class=None):
+        """
+        Se o projeto está fixado: esconde o campo 'project' e limita o queryset a ele.
+        """
+        form = super().get_form(form_class)
+        if self.fixed_project:
+            # limita o queryset a apenas o projeto fixado
+            form.fields["project"].queryset = Project.objects.filter(pk=self.fixed_project.pk)
+            form.fields["project"].initial = self.fixed_project.pk
+            # esconde no HTML (vamos mostrar um read-only bonito no template)
+            from django import forms as djforms
+            form.fields["project"].widget = djforms.HiddenInput()
+        return form
+
     def form_valid(self, form):
-        user = self.request.user
-        project = form.cleaned_data["project"]
-
-        # valida acesso ao projeto
-        if not _user_can_view_project(user, project):
-            raise PermissionDenied("You cannot create tasks in this project.")
-
-        form.instance.reporter = user
+        """
+        Garante que o projeto é o fixado, mesmo que alguém tente adulterar o POST.
+        """
+        if self.fixed_project:
+            form.instance.project = self.fixed_project
+        form.instance.reporter = self.request.user
         resp = super().form_valid(form)
         messages.success(self.request, "Task created successfully.")
         return resp
 
     def get_success_url(self):
         return reverse("tasck:task_detail", kwargs={"pk": self.object.pk})
-
-
+    
+    
 class TaskDetailView(LoginRequiredMixin, DetailView):
-    """
-    Detalhe de uma task + caixa de mensagens embutida (POST):
-      - Apenas quem pode ver o projeto pode ver a task.
-      - Post de mensagem preenche automaticamente author_name com o usuário atual.
-    """
     model = Task
     template_name = "tasck/task_detail.html"
     context_object_name = "task"
@@ -129,11 +156,10 @@ class TaskDetailView(LoginRequiredMixin, DetailView):
     def get_queryset(self):
         qs = (super().get_queryset()
               .select_related("project", "assignee", "reporter")
-              .prefetch_related("labels", "memberships__user", "messages"))
+              .prefetch_related("labels", "memberships__user", "messages", "commits"))
         user = self.request.user
         if getattr(user, "can_manage_projects", False):
             return qs
-        # Restringe às tasks de projetos onde o user é owner/membro
         return qs.filter(
             Q(project__owner=user) |
             Q(project__memberships__user=user)
@@ -141,21 +167,18 @@ class TaskDetailView(LoginRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        # Form de mensagem
-        initial = {"author_name": _user_display_name(self.request.user)}
-        ctx["message_form"] = TaskMessageForm(initial=initial)
-        # Lista de mensagens (já vem no prefetch), mas vamos ordenar na view para garantir
-        ctx["messages_list"] = self.object.messages.select_related(None).order_by("created_at", "pk")
+        ctx["message_form"] = TaskMessageForm()
+        ctx["messages_list"] = self.object.messages.order_by("created_at", "pk")
+        ctx["commits_list"] = self.object.commits.all().order_by("-created_at")
         return ctx
 
     def post(self, request, *args, **kwargs):
         """
-        Recebe a postagem de mensagem (campo 'text' e opcionalmente 'author_name').
+        Post de mensagem (text). author_name é preenchido automaticamente.
         """
         self.object = self.get_object()
         user = request.user
 
-        # Checa se pode interagir
         if not _user_can_view_project(user, self.object.project):
             raise PermissionDenied("You cannot post messages in this task.")
 
@@ -164,27 +187,17 @@ class TaskDetailView(LoginRequiredMixin, DetailView):
             msg: TaskMessage = form.save(commit=False)
             msg.task = self.object
             msg.agent = TaskMessage.Agent.USER
-
-            # Preenche/força o author_name automaticamente com o usuário atual,
-            # porém se você quiser permitir edição manual, comente a linha abaixo.
             msg.author_name = _user_display_name(user)
-
             msg.save()
             messages.success(request, "Message posted.")
             return redirect("tasck:task_detail", pk=self.object.pk)
 
-        # re-render com erros
         ctx = self.get_context_data(object=self.object)
         ctx["message_form"] = form
         return self.render_to_response(ctx)
 
 
 class TaskUpdateView(LoginRequiredMixin, UpdateView):
-    """
-    Edição de task:
-      - Admin/manager ou owner do projeto podem editar qualquer task do projeto.
-      - Reporter também pode editar por padrão? (ajuste conforme sua regra)
-    """
     model = Task
     form_class = TaskForm
     template_name = "tasck/task_form.html"
@@ -204,10 +217,6 @@ class TaskUpdateView(LoginRequiredMixin, UpdateView):
 
 
 class TaskDeleteView(LoginRequiredMixin, DeleteView):
-    """
-    Remoção de task:
-      - Admin/manager ou owner do projeto podem remover.
-    """
     model = Task
     template_name = "tasck/task_confirm_delete.html"
     success_url = reverse_lazy("tasck:task_list")
@@ -223,13 +232,7 @@ class TaskDeleteView(LoginRequiredMixin, DeleteView):
         return super().delete(request, *args, **kwargs)
 
 
-# ========= Membros da Task =========
-
 class TaskMembersView(LoginRequiredMixin, View):
-    """
-    Tela para gerenciar membros da task (adicionar/remover).
-    - Apenas admin/manager ou owner do projeto podem gerenciar membros.
-    """
     template_name = "tasck/task_members.html"
 
     def _get_task(self, pk: int) -> Task:
@@ -242,7 +245,6 @@ class TaskMembersView(LoginRequiredMixin, View):
         task = self._get_task(pk)
         if not _user_can_edit_project(request.user, task.project):
             raise PermissionDenied("You cannot manage members for this task.")
-
         form = TaskMemberForm()
         memberships = task.memberships.select_related("user").all()
         return render(request, self.template_name, {"task": task, "form": form, "memberships": memberships})
@@ -256,7 +258,6 @@ class TaskMembersView(LoginRequiredMixin, View):
         if form.is_valid():
             member = form.save(commit=False)
             member.task = task
-            # Evita duplicidade
             exists = TaskMember.objects.filter(task=task, user=member.user).exists()
             if exists:
                 messages.warning(request, "This user is already a member of the task.")
@@ -270,14 +271,111 @@ class TaskMembersView(LoginRequiredMixin, View):
 
 
 class TaskMemberDeleteView(LoginRequiredMixin, View):
-    """
-    Remoção de um membro específico da task.
-    """
     def post(self, request, pk, user_id):
         task = get_object_or_404(Task.objects.select_related("project"), pk=pk)
         if not _user_can_edit_project(request.user, task.project):
             raise PermissionDenied("You cannot manage members for this task.")
-
         TaskMember.objects.filter(task=task, user_id=user_id).delete()
         messages.success(request, "Member removed from task.")
         return redirect("tasck:task_members", pk=task.pk)
+
+
+class ProjectKanbanView(LoginRequiredMixin, View):
+    template_name = "tasck/kanban.html"
+
+    def get(self, request: HttpRequest, project_id: int) -> HttpResponse:
+        project = get_object_or_404(Project, pk=project_id)
+        if not _user_can_view_project(request.user, project):
+            raise PermissionDenied()
+
+        form = KanbanFilterForm(request.GET or None)
+        q = form.cleaned_data.get("q") if form.is_valid() else ""
+
+        qs = (Task.objects.filter(project=project)
+              .select_related("assignee", "reporter")
+              .prefetch_related("labels"))
+        if q:
+            qs = qs.filter(Q(title__icontains=q) | Q(description__icontains=q) | Q(key__icontains=q))
+
+        columns = {
+            Task.Status.TODO: [],
+            Task.Status.IN_PROGRESS: [],
+            Task.Status.REVIEW: [],
+            Task.Status.VERIFIED: [],
+            Task.Status.DONE: [],
+            Task.Status.FAILED: [],
+        }
+        for t in qs.order_by("-created_at"):
+            columns.get(t.status, columns[Task.Status.TODO]).append(t)
+
+        ctx = {"project": project, "columns": columns, "form": form}
+        return render(request, self.template_name, ctx)
+
+
+class KanbanStatusUpdateView(LoginRequiredMixin, View):
+    def post(self, request: HttpRequest, project_id: int, task_id: int) -> JsonResponse:
+        project = get_object_or_404(Project, pk=project_id)
+        task = get_object_or_404(Task, pk=task_id, project=project)
+
+        if not _user_can_edit_project(request.user, project) and task.reporter_id != request.user.id:
+            raise PermissionDenied("You cannot move this task.")
+
+        new_status = (request.POST.get("status") or "").strip()
+        valid = {k for k, _ in Task.Status.choices}
+        if new_status not in valid:
+            return JsonResponse({"ok": False, "error": "Invalid status"}, status=400)
+
+        task.status = new_status
+        task.save(update_fields=["status"])
+        return JsonResponse({"ok": True})
+
+
+class ProjectTaskListView(LoginRequiredMixin, View):
+    template_name = "tasck/task_list_project.html"
+
+    def get(self, request, project_id: int):
+        project = get_object_or_404(Project, pk=project_id)
+        if not _user_can_view_project(request.user, project):
+            raise PermissionDenied()
+
+        form = KanbanFilterForm(request.GET or None)
+        q = form.cleaned_data.get("q") if form.is_valid() else ""
+
+        qs = (Task.objects.filter(project=project)
+              .select_related("assignee", "reporter")
+              .prefetch_related("labels"))
+        if q:
+            qs = qs.filter(Q(title__icontains=q) | Q(description__icontains=q) | Q(key__icontains=q))
+
+        tasks = qs.order_by("-created_at")
+        return render(request, self.template_name, {"project": project, "tasks": tasks, "form": form})
+
+
+class TaskCommitDetailView(LoginRequiredMixin, View):
+    """
+    Viewer/Editor de commit (campos de curadoria + processed).
+    """
+    template_name = "tasck/commit_detail.html"
+
+    def get(self, request, task_id: int, sha: str):
+        task = get_object_or_404(Task, pk=task_id)
+        if not _user_can_view_project(request.user, task.project):
+            raise PermissionDenied()
+
+        commit = get_object_or_404(TaskCommit, task=task, sha=sha)
+        form = TaskCommitReviewForm(instance=commit)
+        return render(request, self.template_name, {"task": task, "commit": commit, "form": form})
+
+    def post(self, request, task_id: int, sha: str):
+        task = get_object_or_404(Task, pk=task_id)
+        if not _user_can_edit_project(request.user, task.project) and task.reporter_id != request.user.id:
+            raise PermissionDenied()
+
+        commit = get_object_or_404(TaskCommit, task=task, sha=sha)
+        form = TaskCommitReviewForm(request.POST, instance=commit)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Commit notes saved.")
+            return redirect("tasck:commit_detail", task_id=task.id, sha=commit.sha)
+
+        return render(request, self.template_name, {"task": task, "commit": commit, "form": form})

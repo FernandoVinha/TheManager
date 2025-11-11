@@ -1,0 +1,34 @@
+{% extends "base_sidebar.html" %}
+{% load static %}
+{% block title %}Kanban — {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-2">
+  <h1 class="h5 m-0">Kanban — {{ project.name }}</h1>
+  <form class="d-flex gap-2" method="get">
+    {{ form.q }}
+    <button class="btn btn-outline-secondary">Filter</button>
+  </form>
+</div>
+
+<div class="row g-3">
+  {% for col, items in columns.items %}
+    <div class="col-lg-4">
+      <div class="og-card p-2">
+        <div class="px-2 py-1 border-bottom"><strong>{{ col.label }}</strong></div>
+        <div class="vstack gap-2 p-2">
+          {% for t in items %}
+            <div class="border rounded p-2">
+              <div class="small text-muted">{{ t.project.key }}-{{ t.key }}</div>
+              <div class="fw-semibold"><a href="{% url 'tasck:task_detail' pk=t.pk %}">{{ t.title }}</a></div>
+              <div class="small text-muted">{{ t.assignee|default:"—" }}</div>
+            </div>
+          {% empty %}
+            <div class="text-muted">Empty</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}

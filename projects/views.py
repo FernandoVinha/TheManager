@@ -9,6 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import CreateView, ListView, UpdateView, DeleteView
+from tasck.models import Task 
 
 from .forms import ProjectForm, ProjectMemberForm
 from .models import Project, ProjectMember
@@ -168,3 +169,42 @@ class ProjectDetailView(LoginRequiredMixin, DetailView):
             return qs
         # Usuário comum: somente owner ou membro
         return qs.filter(Q(owner=user) | Q(memberships__user=user)).distinct()
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        project = self.object
+
+        # Filtro rápido por texto
+        q = (self.request.GET.get("q") or "").strip()
+        qs = (Task.objects.filter(project=project)
+              .select_related("assignee", "reporter")
+              .prefetch_related("labels"))
+
+        if q:
+            qs = qs.filter(
+                Q(title__icontains=q) |
+                Q(description__icontains=q) |
+                Q(key__icontains=q)
+            )
+
+        # Mapeia status -> rótulo legível
+        status_map = {
+            Task.Status.TODO: "To do",
+            Task.Status.IN_PROGRESS: "In progress",
+            Task.Status.REVIEW: "In review",
+            Task.Status.VERIFIED: "Verified",
+            Task.Status.DONE: "Done",
+            Task.Status.FAILED: "Failed",
+        }
+
+        # Cria dicionário de colunas já com as chaves na ordem desejada
+        columns = {label: [] for label in status_map.values()}
+
+        # Preenche colunas (pode ordenar como preferir; aqui por criação desc)
+        for t in qs.order_by("-created_at"):
+            label = status_map.get(t.status, status_map[Task.Status.TODO])
+            columns[label].append(t)
+
+        ctx["columns"] = columns
+        ctx["tasks_count"] = qs.count()
+        return ctx

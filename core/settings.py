@@ -36,6 +36,7 @@ INSTALLED_APPS = [
 
     "accounts",
     "projects",
+    "tasck",
 ]
 
 AUTH_USER_MODEL = "accounts.User"

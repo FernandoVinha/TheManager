@@ -1,0 +1,38 @@
+{% extends "base_sidebar.html" %}
+{% block title %}Tasks — {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="og-card p-3">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h5 m-0">Tasks — {{ project.name }}</h1>
+    <a href="{% url 'tasck:task_create' %}?project={{ project.id }}" class="btn btn-primary btn-sm">New task</a>
+  </div>
+
+  <form class="row g-2 mb-3" method="get">
+    <div class="col-md-6">{{ form.q }}</div>
+    <div class="col-auto"><button class="btn btn-outline-secondary">Filter</button></div>
+  </form>
+
+  <div class="table-responsive">
+    <table class="table align-middle">
+      <thead><tr><th>Key</th><th>Title</th><th>Status</th><th>Priority</th><th>Assignee</th><th class="text-end">Actions</th></tr></thead>
+      <tbody>
+      {% for t in tasks %}
+        <tr>
+          <td>{{ t.project.key }}-{{ t.key }}</td>
+          <td><a href="{% url 'tasck:task_detail' pk=t.pk %}">{{ t.title }}</a></td>
+          <td>{{ t.get_status_display }}</td>
+          <td>{{ t.get_priority_display }}</td>
+          <td>{{ t.assignee|default:"—" }}</td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-outline-secondary" href="{% url 'tasck:task_update' pk=t.pk %}">Edit</a>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="text-center text-muted">No tasks.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -5,6 +5,7 @@
 
 {% block content %}
 <div class="row g-4">
+  <!-- COL ESQUERDA: Card do Projeto -->
   <div class="col-12 col-lg-8">
     <div class="card shadow-sm">
       {% if project.image %}
@@ -30,8 +31,70 @@
         <small class="text-muted">Owner: {{ project.owner.get_username|default:project.owner }}</small>
       </div>
     </div>
+
+    <!-- ===== Kanban das Tasks (dentro do Project Detail) ===== -->
+    <div class="card shadow-sm mt-4">
+      <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-2">
+          <h4 class="h6 m-0">Tasks (Kanban)</h4>
+          {% if tasks_count is not None %}
+            <span class="badge text-bg-light">{{ tasks_count }} total</span>
+          {% endif %}
+        </div>
+
+        <div class="d-flex gap-2">
+          <form method="get" class="d-flex gap-2">
+            <input type="search" name="q" class="form-control form-control-sm" placeholder="Search…" value="{{ request.GET.q }}">
+            <button class="btn btn-outline-secondary btn-sm">Filter</button>
+          </form>
+
+          <!-- Botão Add task direcionando para o create com ?project=ID -->
+          <a href="{% url 'tasck:task_create' %}?project={{ project.id }}" class="btn btn-primary btn-sm">
+            + Add task
+          </a>
+        </div>
+      </div>
+
+      <div class="card-body">
+        {% if columns %}
+          <div class="row g-3">
+            {% for status_label, items in columns.items %}
+              <div class="col-12 col-lg-4">
+                <div class="og-card p-2">
+                  <div class="px-2 py-1 border-bottom d-flex justify-content-between align-items-center">
+                    <strong>{{ status_label }}</strong>
+                    <span class="badge text-bg-light">{{ items|length }}</span>
+                  </div>
+                  <div class="vstack gap-2 p-2">
+                    {% for t in items %}
+                      <div class="border rounded p-2">
+                        <div class="small text-muted">{{ t.project.key }}-{{ t.key }}</div>
+                        <div class="fw-semibold">
+                          <a href="{% url 'tasck:task_detail' pk=t.pk %}">{{ t.title }}</a>
+                        </div>
+                        <div class="d-flex justify-content-between small">
+                          <span class="text-muted">Assignee: {{ t.assignee|default:"—" }}</span>
+                          <span class="text-muted">Priority: {{ t.get_priority_display }}</span>
+                        </div>
+                      </div>
+                    {% empty %}
+                      <div class="text-muted">Empty</div>
+                    {% endfor %}
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="text-muted">No tasks for this project.</div>
+        {% endif %}
+      </div>
+    </div>
+    <!-- ===== /Kanban ===== -->
+
   </div>
 
+  <!-- COL DIREITA: Info + Members -->
   <div class="col-12 col-lg-4">
     <div class="card shadow-sm mb-3">
       <div class="card-header">Info</div>

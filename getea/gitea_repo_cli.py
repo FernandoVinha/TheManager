@@ -1,36 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-"""
-gitea_repo_cli.py
-CLI para operações de repositório no Gitea usando a API:
-
-- Lê SEMPRE o .env do diretório atual (ROOT_URL/GITEA_BASE_URL e GITEA_ADMIN_TOKEN)
-- Usa header "Sudo: <owner>" p/ agir como um usuário/organização (ex.: criar repo em 'owner')
-- Subcomandos:
-    create       -> cria repo (em owner via --owner usando Sudo)
-    edit         -> edita repo (descrição, private, default_branch, etc.)
-    delete       -> apaga repo
-    show         -> mostra repo (JSON)
-    list         -> lista repos do owner (usuário/org) **sem Sudo** (endpoint users/orgs)
-    fork         -> faz fork de repo em outro owner (via Sudo)
-    pr-create    -> abre Pull Request
-    pr-merge     -> faz merge de PR
-    collab-add   -> adiciona colaborador
-    collab-del   -> remove colaborador
-    branches     -> lista branches do repo
-    prs          -> lista PRs do repo
-
-Exemplos:
-  python gitea_repo_cli.py create --owner john --name demo --private true --desc "meu repo"
-  python gitea_repo_cli.py edit   --owner john --repo demo --desc "novo texto" --default-branch main
-  python gitea_repo_cli.py delete --owner john --repo demo
-  python gitea_repo_cli.py fork   --src-owner john --src-repo demo --dst-owner manager --name demo-fork
-  python gitea_repo_cli.py pr-create --owner john --repo demo --head feature --base main --title "Add X"
-  python gitea_repo_cli.py pr-merge  --owner john --repo demo --index 3 --method merge
-  python gitea_repo_cli.py collab-add --owner john --repo demo --user maria --perm write
-"""
-
+# getea/gitea_repo_cli.py
 from __future__ import annotations
 
 import argparse
@@ -40,21 +8,28 @@ import sys
 import urllib.request
 import urllib.error
 import urllib.parse
-from typing import Optional
+from typing import Optional, Tuple
 
 ENV_FILENAME = ".env"
 
-# =============== utils ===============
+# =======================
+# Utilidades de ambiente
+# =======================
+
 def _strip_quotes(v: str) -> str:
     if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
         return v[1:-1]
     return v
 
 def load_env_or_die() -> dict:
+    """
+    Lê .env do diretório atual.
+    Aceita linhas no formato KEY=VAL (ignora comentários e linhas vazias).
+    """
     path = os.path.join(os.getcwd(), ENV_FILENAME)
     if not os.path.isfile(path):
-        raise RuntimeError(f"Arquivo {ENV_FILENAME} não encontrado em {os.getcwd()}")
-    env = {}
+        raise RuntimeError(f"File {ENV_FILENAME} not found in {os.getcwd()}")
+    env: dict[str, str] = {}
     with open(path, "r", encoding="utf-8") as f:
         for raw in f:
             line = raw.strip()
@@ -64,17 +39,34 @@ def load_env_or_die() -> dict:
             env[k.strip()] = _strip_quotes(v.strip())
     return env
 
-def base_url_and_token() -> tuple[str, str]:
+def base_url_and_token() -> Tuple[str, str]:
+    """
+    Retorna (base_url, admin_token) a partir do .env local.
+    Usa ROOT_URL como fallback de GITEA_BASE_URL.
+    """
     env = load_env_or_die()
     base_url = (env.get("ROOT_URL") or env.get("GITEA_BASE_URL") or "").rstrip("/")
     token = env.get("GITEA_ADMIN_TOKEN", "")
     if not base_url:
-        raise RuntimeError("Defina ROOT_URL ou GITEA_BASE_URL no .env")
+        raise RuntimeError("Define ROOT_URL or GITEA_BASE_URL in .env")
     if not token:
-        raise RuntimeError("Defina GITEA_ADMIN_TOKEN no .env")
+        raise RuntimeError("Define GITEA_ADMIN_TOKEN in .env")
     return base_url, token
 
+# =======================
+# HTTP helpers
+# =======================
+
 def http(method: str, url: str, token: str, *, sudo: str = "", payload: dict | None = None, timeout: int = 25):
+    """
+    Faz a requisição HTTP à API do Gitea.
+    - method: GET|POST|PATCH|PUT|DELETE
+    - token: token do admin (ou outro com permissão)
+    - sudo: se informado, age como esse usuário/org (header 'Sudo')
+    - payload: dicionário JSON opcional
+    Retorna JSON (dict/list) quando Content-Type é application/json; caso contrário, texto.
+    Lança urllib.error.HTTPError em erro HTTP.
+    """
     data = None
     headers = {"Accept": "application/json"}
     if payload is not None:
@@ -97,7 +89,7 @@ def print_json(obj):
 def _resolve_owner_kind(base: str, tok: str, owner: str) -> str:
     """
     Retorna 'user' ou 'org' verificando os endpoints adequados.
-    Levanta exceção se nenhum dos dois existir.
+    Lança erro se não existir.
     """
     u = f"{base}/api/v1/users/{urllib.parse.quote(owner)}"
     o = f"{base}/api/v1/orgs/{urllib.parse.quote(owner)}"
@@ -107,16 +99,18 @@ def _resolve_owner_kind(base: str, tok: str, owner: str) -> str:
     except urllib.error.HTTPError as e:
         if e.code != 404:
             raise
-    # tenta org
     try:
         http("GET", o, tok)
         return "org"
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            raise RuntimeError(f"Owner '{owner}' não existe como usuário nem organização no Gitea.")
+            raise RuntimeError(f"Owner '{owner}' does not exist as a user or organization in Gitea.")
         raise
 
-# =============== ops ===============
+# =======================
+# Operações de repositório
+# =======================
+
 def op_show(owner: str, repo: str):
     base, tok = base_url_and_token()
     url = f"{base}/api/v1/repos/{urllib.parse.quote(owner)}/{urllib.parse.quote(repo)}"
@@ -124,8 +118,9 @@ def op_show(owner: str, repo: str):
 
 def op_list(owner: str, *, page: Optional[int] = None, limit: Optional[int] = None):
     """
-    Lista repos do owner sem usar Sudo, escolhendo /users/{u}/repos ou /orgs/{o}/repos.
-    Suporta paginação via ?page=&limit= se informado.
+    Lista repositórios do owner (usuário/org) usando endpoints públicos:
+      - /api/v1/users/{u}/repos ou /api/v1/orgs/{o}/repos
+    Suporta paginação ?page=&limit= quando fornecidos.
     """
     base, tok = base_url_and_token()
     kind = _resolve_owner_kind(base, tok, owner)
@@ -134,7 +129,7 @@ def op_list(owner: str, *, page: Optional[int] = None, limit: Optional[int] = No
     else:
         url = f"{base}/api/v1/orgs/{urllib.parse.quote(owner)}/repos"
 
-    qs = []
+    qs: list[tuple[str, str]] = []
     if page is not None:
         qs.append(("page", str(page)))
     if limit is not None:
@@ -146,14 +141,18 @@ def op_list(owner: str, *, page: Optional[int] = None, limit: Optional[int] = No
 
 def op_create(owner: str, name: str, *, desc: str | None, private: str | None,
               default_branch: str | None, auto_init: bool, gitign: str | None, license_: str | None):
+    """
+    Cria repo sob 'owner' via /api/v1/user/repos + header Sudo.
+    Idempotente: se retornar 409 (já existe), faz GET do repo e retorna o estado atual.
+    """
     base, tok = base_url_and_token()
-    payload = {"name": name}
+    payload: dict[str, object] = {"name": name}
     if desc is not None:
         payload["description"] = desc
     if private is not None:
         pv = private.lower()
         if pv not in ("true", "false"):
-            raise RuntimeError("--private deve ser true|false")
+            raise RuntimeError("--private must be true|false")
         payload["private"] = (pv == "true")
     if default_branch:
         payload["default_branch"] = default_branch
@@ -164,14 +163,20 @@ def op_create(owner: str, name: str, *, desc: str | None, private: str | None,
     if license_:
         payload["license"] = license_
 
-    # Cria no "owner" usando Sudo e /user/repos (funciona para user e org)
     url = f"{base}/api/v1/user/repos"
-    return http("POST", url, tok, sudo=owner, payload=payload)
+    try:
+        return http("POST", url, tok, sudo=owner, payload=payload)
+    except urllib.error.HTTPError as e:
+        if e.code != 409:
+            raise
+        # Já existe: retorna o repo atual
+        show_url = f"{base}/api/v1/repos/{urllib.parse.quote(owner)}/{urllib.parse.quote(name)}"
+        return http("GET", show_url, tok)
 
 def op_edit(owner: str, repo: str, *, new_name: str | None, desc: str | None, private: str | None,
             default_branch: str | None, archived: str | None):
     base, tok = base_url_and_token()
-    payload = {}
+    payload: dict[str, object] = {}
     if new_name:
         payload["name"] = new_name
     if desc is not None:
@@ -179,14 +184,14 @@ def op_edit(owner: str, repo: str, *, new_name: str | None, desc: str | None, pr
     if private is not None:
         pv = private.lower()
         if pv not in ("true", "false"):
-            raise RuntimeError("--private deve ser true|false")
+            raise RuntimeError("--private must be true|false")
         payload["private"] = (pv == "true")
     if default_branch:
         payload["default_branch"] = default_branch
     if archived is not None:
         av = archived.lower()
         if av not in ("true", "false"):
-            raise RuntimeError("--archived deve ser true|false")
+            raise RuntimeError("--archived must be true|false")
         payload["archived"] = (av == "true")
     url = f"{base}/api/v1/repos/{urllib.parse.quote(owner)}/{urllib.parse.quote(repo)}"
     return http("PATCH", url, tok, payload=payload)
@@ -197,18 +202,21 @@ def op_delete(owner: str, repo: str):
     return http("DELETE", url, tok)
 
 def op_fork(src_owner: str, src_repo: str, *, dst_owner: str | None, name: str | None):
-    # Faz fork do repo (Sudo=dst_owner p/ cair na conta do “destino”)
+    """
+    Faz fork de {src_owner}/{src_repo}.
+    Se dst_owner for informado, usa header Sudo para criar o fork no namespace dele.
+    """
     base, tok = base_url_and_token()
-    payload = {}
+    payload: dict[str, object] = {}
     if name:
         payload["name"] = name
-    sudo = dst_owner or ""  # se não enviar, cai na conta do token admin
+    sudo = dst_owner or ""  # se vazio, cai na conta do dono do token
     url = f"{base}/api/v1/repos/{urllib.parse.quote(src_owner)}/{urllib.parse.quote(src_repo)}/forks"
     return http("POST", url, tok, sudo=sudo, payload=payload)
 
 def op_pr_create(owner: str, repo: str, *, head: str, base_branch: str, title: str, body: str | None):
     base, tok = base_url_and_token()
-    payload = {"head": head, "base": base_branch, "title": title}
+    payload: dict[str, object] = {"head": head, "base": base_branch, "title": title}
     if body:
         payload["body"] = body
     url = f"{base}/api/v1/repos/{urllib.parse.quote(owner)}/{urllib.parse.quote(repo)}/pulls"
@@ -216,11 +224,11 @@ def op_pr_create(owner: str, repo: str, *, head: str, base_branch: str, title: s
 
 def op_pr_merge(owner: str, repo: str, *, index: int, method: str | None, title: str | None, message: str | None, delete_branch: str | None):
     base, tok = base_url_and_token()
-    payload = {}
+    payload: dict[str, object] = {}
     if method:
         mm = method.lower()
         if mm not in ("merge", "rebase", "squash", "rebase-merge"):
-            raise RuntimeError("--method deve ser merge|rebase|squash|rebase-merge")
+            raise RuntimeError("--method must be merge|rebase|squash|rebase-merge")
         payload["Do"] = mm
     if title:
         payload["MergeTitleField"] = title
@@ -229,14 +237,20 @@ def op_pr_merge(owner: str, repo: str, *, index: int, method: str | None, title:
     if delete_branch is not None:
         dv = delete_branch.lower()
         if dv not in ("true", "false"):
-            raise RuntimeError("--delete-branch deve ser true|false")
+            raise RuntimeError("--delete-branch must be true|false")
         payload["delete_branch_after_merge"] = (dv == "true")
     url = f"{base}/api/v1/repos/{urllib.parse.quote(owner)}/{urllib.parse.quote(repo)}/pulls/{index}/merge"
     return http("POST", url, tok, payload=payload)
 
 def op_collab_add(owner: str, repo: str, user: str, perm: str | None):
+    """
+    Adiciona colaborador (perm: read|write|admin). Valida entrada.
+    """
     base, tok = base_url_and_token()
-    # perm: read|write|admin
+    if perm:
+        p = perm.lower()
+        if p not in ("read", "write", "admin"):
+            raise RuntimeError("--perm must be one of: read|write|admin")
     url = f"{base}/api/v1/repos/{urllib.parse.quote(owner)}/{urllib.parse.quote(repo)}/collaborators/{urllib.parse.quote(user)}"
     payload = {"permission": perm} if perm else {}
     return http("PUT", url, tok, payload=payload)
@@ -256,35 +270,38 @@ def op_prs(owner: str, repo: str):
     url = f"{base}/api/v1/repos/{urllib.parse.quote(owner)}/{urllib.parse.quote(repo)}/pulls"
     return http("GET", url, tok)
 
-# =============== CLI ===============
+# =======================
+# CLI
+# =======================
+
 def main():
-    p = argparse.ArgumentParser(description="Gitea Repo CLI (.env no diretório atual)")
+    p = argparse.ArgumentParser(description="Gitea Repo CLI (.env in current directory)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     # show
-    s = sub.add_parser("show", help="Mostrar repo")
+    s = sub.add_parser("show", help="Show repository")
     s.add_argument("--owner", required=True)
     s.add_argument("--repo", required=True)
 
     # list
-    l = sub.add_parser("list", help="Listar repos do owner (users/orgs endpoints)")
+    l = sub.add_parser("list", help="List repositories for owner (users/orgs endpoints)")
     l.add_argument("--owner", required=True)
     l.add_argument("--page", type=int)
     l.add_argument("--limit", type=int)
 
     # create
-    c = sub.add_parser("create", help="Criar repo em owner (via Sudo)")
-    c.add_argument("--owner", required=True, help="usuário/org onde o repo será criado")
+    c = sub.add_parser("create", help="Create repository under owner (via Sudo)")
+    c.add_argument("--owner", required=True, help="user/org where the repo will be created")
     c.add_argument("--name", required=True)
     c.add_argument("--desc")
     c.add_argument("--private", help="true|false")
     c.add_argument("--default-branch")
-    c.add_argument("--auto-init", action="store_true", help="criar README inicial")
-    c.add_argument("--gitign", help="template .gitignore (ex: Python)")
-    c.add_argument("--license", dest="license_", help="template licença (ex: MIT)")
+    c.add_argument("--auto-init", action="store_true", help="create initial README")
+    c.add_argument("--gitign", help="gitignore template (e.g., Python)")
+    c.add_argument("--license", dest="license_", help="license template (e.g., MIT)")
 
     # edit
-    e = sub.add_parser("edit", help="Editar repo")
+    e = sub.add_parser("edit", help="Edit repository")
     e.add_argument("--owner", required=True)
     e.add_argument("--repo", required=True)
     e.add_argument("--new-name")
@@ -294,23 +311,23 @@ def main():
     e.add_argument("--archived", help="true|false")
 
     # delete
-    d = sub.add_parser("delete", help="Apagar repo")
+    d = sub.add_parser("delete", help="Delete repository")
     d.add_argument("--owner", required=True)
     d.add_argument("--repo", required=True)
 
     # fork
-    f = sub.add_parser("fork", help="Fork de repo")
+    f = sub.add_parser("fork", help="Fork repository")
     f.add_argument("--src-owner", required=True)
     f.add_argument("--src-repo", required=True)
-    f.add_argument("--dst-owner", help="para quem vai o fork (Sudo)")
-    f.add_argument("--name", help="nome do fork (opcional)")
+    f.add_argument("--dst-owner", help="who receives the fork (Sudo)")
+    f.add_argument("--name", help="fork name (optional)")
 
     # PR create
-    pc = sub.add_parser("pr-create", help="Criar Pull Request")
+    pc = sub.add_parser("pr-create", help="Create Pull Request")
     pc.add_argument("--owner", required=True)
     pc.add_argument("--repo", required=True)
-    pc.add_argument("--head", required=True, help="branch com mudanças (ex: feature)")
-    pc.add_argument("--base", dest="base_branch", required=True, help="branch alvo (ex: main)")
+    pc.add_argument("--head", required=True, help="branch with changes (e.g., feature)")
+    pc.add_argument("--base", dest="base_branch", required=True, help="target branch (e.g., main)")
     pc.add_argument("--title", required=True)
     pc.add_argument("--body")
 
@@ -318,31 +335,31 @@ def main():
     pm = sub.add_parser("pr-merge", help="Merge Pull Request")
     pm.add_argument("--owner", required=True)
     pm.add_argument("--repo", required=True)
-    pm.add_argument("--index", required=True, type=int, help="número/ID do PR")
+    pm.add_argument("--index", required=True, type=int, help="PR number/ID")
     pm.add_argument("--method", help="merge|rebase|squash|rebase-merge")
     pm.add_argument("--title")
     pm.add_argument("--message")
     pm.add_argument("--delete-branch", help="true|false")
 
     # collaborators
-    ca = sub.add_parser("collab-add", help="Adicionar colaborador")
+    ca = sub.add_parser("collab-add", help="Add collaborator")
     ca.add_argument("--owner", required=True)
     ca.add_argument("--repo", required=True)
     ca.add_argument("--user", required=True)
-    ca.add_argument("--perm", choices=["read", "write", "admin"], help="permissão")
+    ca.add_argument("--perm", choices=["read", "write", "admin"], help="permission")
 
-    cd = sub.add_parser("collab-del", help="Remover colaborador")
+    cd = sub.add_parser("collab-del", help="Remove collaborator")
     cd.add_argument("--owner", required=True)
     cd.add_argument("--repo", required=True)
     cd.add_argument("--user", required=True)
 
     # branches
-    b = sub.add_parser("branches", help="Listar branches")
+    b = sub.add_parser("branches", help="List branches")
     b.add_argument("--owner", required=True)
     b.add_argument("--repo", required=True)
 
     # prs list
-    prl = sub.add_parser("prs", help="Listar PRs")
+    prl = sub.add_parser("prs", help="List pull requests")
     prl.add_argument("--owner", required=True)
     prl.add_argument("--repo", required=True)
 
@@ -376,7 +393,7 @@ def main():
 
         elif args.cmd == "delete":
             op_delete(args.owner, args.repo)
-            print("✅ Repositório deletado.")
+            print("✅ Repository deleted.")
 
         elif args.cmd == "fork":
             res = op_fork(args.src_owner, args.src_repo, dst_owner=args.dst_owner, name=args.name)
@@ -401,7 +418,7 @@ def main():
 
         elif args.cmd == "collab-del":
             op_collab_del(args.owner, args.repo, args.user)
-            print("✅ Colaborador removido.")
+            print("✅ Collaborator removed.")
 
         elif args.cmd == "branches":
             print_json(op_branches(args.owner, args.repo))
@@ -410,14 +427,14 @@ def main():
             print_json(op_prs(args.owner, args.repo))
 
         else:
-            raise RuntimeError("Comando inválido")
+            raise RuntimeError("Invalid command")
 
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
         print(f"❌ HTTP {e.code} {e.reason} — {body}", file=sys.stderr)
         sys.exit(2)
     except Exception as e:
-        print(f"❌ Erro: {e}", file=sys.stderr)
+        print(f"❌ Error: {e}", file=sys.stderr)
         sys.exit(2)
 
 if __name__ == "__main__":

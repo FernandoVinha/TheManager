@@ -1,28 +1,34 @@
 # tasck/urls.py
 from django.urls import path
-
-from . import views
+from .views import (
+    TaskListView, TaskCreateView, TaskDetailView, TaskUpdateView, TaskDeleteView,
+    TaskMembersView, TaskMemberDeleteView, ProjectKanbanView, KanbanStatusUpdateView,
+    ProjectTaskListView, TaskCommitDetailView,
+)
 
 app_name = "tasck"
 
 urlpatterns = [
+    path("tasks/", TaskListView.as_view(), name="task_list"),
+    path("tasks/new/", TaskCreateView.as_view(), name="task_create"),
+    path("tasks/<int:pk>/", TaskDetailView.as_view(), name="task_detail"),
+    path("tasks/<int:pk>/edit/", TaskUpdateView.as_view(), name="task_update"),
+    path("tasks/<int:pk>/delete/", TaskDeleteView.as_view(), name="task_delete"),
 
-    # LIST + CREATE
-    path("", views.TaskListView.as_view(), name="task_list"),
-    path("new/", views.TaskCreateView.as_view(), name="task_create"),
+    path("tasks/<int:pk>/members/", TaskMembersView.as_view(), name="task_members"),
+    path("tasks/<int:pk>/members/<int:user_id>/delete/", TaskMemberDeleteView.as_view(),
+         name="task_member_delete"),
 
-    # DETAIL
-    path("<int:pk>/", views.TaskDetailView.as_view(), name="task_detail"),
+    # Kanban (por projeto) + atualização de status via AJAX (se usar)
+    path("projects/<int:project_id>/kanban/", ProjectKanbanView.as_view(), name="project_kanban"),
+    path("projects/<int:project_id>/kanban/<int:task_id>/move/", KanbanStatusUpdateView.as_view(),
+         name="kanban_status_update"),
 
-    # EDIT
-    path("<int:pk>/edit/", views.TaskUpdateView.as_view(), name="task_edit"),
+    # Lista de tasks por projeto (tabela)
+    path("projects/<int:project_id>/tasks/", ProjectTaskListView.as_view(),
+         name="project_task_list"),
 
-    # DELETE
-    path("<int:pk>/delete/", views.TaskDeleteView.as_view(), name="task_delete"),
-
-    # MEMBERS LIST + ADD
-    path("<int:pk>/members/", views.TaskMembersView.as_view(), name="task_members"),
-
-    # REMOVE MEMBER
-    path("<int:pk>/members/<int:user_id>/delete/", views.TaskMemberDeleteView.as_view(), name="task_member_delete"),
+    # Commit viewer/editor
+    path("tasks/<int:task_id>/commits/<str:sha>/", TaskCommitDetailView.as_view(),
+         name="commit_detail"),
 ]

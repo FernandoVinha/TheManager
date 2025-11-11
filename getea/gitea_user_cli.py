@@ -1,28 +1,5 @@
 #getea/gitea_user_cli.py
-#!/usr/bin/env python3
-"""
-Gitea User CLI — create, edit, delete, and show users.
 
-Key improvements vs your draft:
-- No shell=True: safer argv invocation for docker/HTTP ops.
-- Automatic container name/env: honors GITEA_CONTAINER, falls back to "gitea".
-- Preflight checks: docker daemon up? container running? Admin token present when needed?
-- Uniform JSON outputs (with --json) for create/delete in addition to show/edit.
-- Clear errors with actionable hints; exit codes: 0 ok, 1 usage/args, 2 runtime/docker/api errors.
-- .env loader tolerates CRLF, export VAR=… lines, and quoted values.
-- Small helpers: --dry-run, --verbose, default timeouts, and a single place to build docker exec argv.
-
-Usage examples:
-  python gitea_user_cli.py create --username john --email john@example.com --password 'Pass#2025' --admin
-  python gitea_user_cli.py edit   --username john --password 'NewPass#2025'
-  python gitea_user_cli.py edit   --username john --new-username john1 --full-name 'John One'
-  python gitea_user_cli.py delete --username john1
-  python gitea_user_cli.py show   --username manager
-
-Requires:
-  - `.env` in the current working directory containing at least ROOT_URL or GITEA_BASE_URL
-  - For admin API calls, GITEA_ADMIN_TOKEN must be set in `.env` (site admin token)
-"""
 from __future__ import annotations
 
 import argparse

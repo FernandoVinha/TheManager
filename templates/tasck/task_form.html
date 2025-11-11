@@ -1,0 +1,141 @@
+{% extends "base_sidebar.html" %}
+{% load static form_extras %}
+
+{% block title %}{{ view.object|default:"New Task" }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto" style="max-width: 980px;">
+  <div class="og-card p-4">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h1 class="h5 m-0">{{ view.object|default:"New Task" }}</h1>
+      <a href="{% url 'tasck:task_list' %}" class="btn btn-outline-secondary btn-sm">Back to list</a>
+    </div>
+
+    {% if form.non_field_errors %}
+      <div class="alert alert-warning py-2 mb-3">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" novalidate>
+      {% csrf_token %}
+
+      <div class="row g-3">
+        <!-- PROJECT -->
+        <div class="col-md-6">
+          {% if form.project.is_hidden %}
+            {{ form.project }} {# hidden input com o ID #}
+            <div class="form-floating">
+              <input type="text" class="form-control" value="{{ view.fixed_project.name }} ({{ view.fixed_project.key }})" readonly>
+              <label>Project</label>
+            </div>
+          {% else %}
+            <div class="form-floating">
+              {{ form.project|add_class:"form-select" }}
+              <label for="{{ form.project.id_for_label }}">Project</label>
+              {% if form.project.errors %}<div class="invalid-feedback d-block">{{ form.project.errors|striptags }}</div>{% endif %}
+            </div>
+          {% endif %}
+        </div>
+
+        <!-- KEY -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="text" class="form-control{% if form.key.errors %} is-invalid{% endif %}"
+                   id="{{ form.key.id_for_label }}" name="{{ form.key.html_name }}"
+                   value="{{ form.key.value|default_if_none:'' }}" placeholder="short-key">
+            <label for="{{ form.key.id_for_label }}">Key (slug)</label>
+            {% if form.key.errors %}<div class="invalid-feedback d-block">{{ form.key.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+
+        <!-- TITLE -->
+        <div class="col-12">
+          <div class="form-floating">
+            <input type="text" class="form-control{% if form.title.errors %} is-invalid{% endif %}"
+                   id="{{ form.title.id_for_label }}" name="{{ form.title.html_name }}"
+                   value="{{ form.title.value|default_if_none:'' }}" placeholder="Task title" required>
+            <label for="{{ form.title.id_for_label }}">Title</label>
+            {% if form.title.errors %}<div class="invalid-feedback d-block">{{ form.title.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+
+        <!-- DESCRIPTION -->
+        <div class="col-12">
+          <div class="form-floating">
+            <textarea class="form-control{% if form.description.errors %} is-invalid{% endif %}"
+                      id="{{ form.description.id_for_label }}" name="{{ form.description.html_name }}"
+                      placeholder="Description" style="height:120px">{{ form.description.value|default_if_none:'' }}</textarea>
+            <label for="{{ form.description.id_for_label }}">Description</label>
+            {% if form.description.errors %}<div class="invalid-feedback d-block">{{ form.description.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+
+        <!-- STATUS / PRIORITY / ASSIGNEE -->
+        <div class="col-md-4">
+          <div class="form-floating">
+            {{ form.status|add_class:"form-select" }}
+            <label for="{{ form.status.id_for_label }}">Status</label>
+            {% if form.status.errors %}<div class="invalid-feedback d-block">{{ form.status.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="form-floating">
+            {{ form.priority|add_class:"form-select" }}
+            <label for="{{ form.priority.id_for_label }}">Priority</label>
+            {% if form.priority.errors %}<div class="invalid-feedback d-block">{{ form.priority.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="form-floating">
+            {{ form.assignee|add_class:"form-select" }}
+            <label for="{{ form.assignee.id_for_label }}">Assignee</label>
+            {% if form.assignee.errors %}<div class="invalid-feedback d-block">{{ form.assignee.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+
+        <!-- LABELS -->
+        <div class="col-12">
+          <label class="form-label">Labels</label>
+          {{ form.labels }}
+          {% if form.labels.errors %}<div class="invalid-feedback d-block">{{ form.labels.errors|striptags }}</div>{% endif %}
+        </div>
+
+        <!-- DATES -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="date" class="form-control{% if form.due_date.errors %} is-invalid{% endif %}"
+                   id="{{ form.due_date.id_for_label }}" name="{{ form.due_date.html_name }}"
+                   value="{{ form.due_date.value|default_if_none:'' }}">
+            <label for="{{ form.due_date.id_for_label }}">Due date</label>
+            {% if form.due_date.errors %}<div class="invalid-feedback d-block">{{ form.due_date.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="date" class="form-control{% if form.delivered_date.errors %} is-invalid{% endif %}"
+                   id="{{ form.delivered_date.id_for_label }}" name="{{ form.delivered_date.html_name }}"
+                   value="{{ form.delivered_date.value|default_if_none:'' }}">
+            <label for="{{ form.delivered_date.id_for_label }}">Delivered date</label>
+            {% if form.delivered_date.errors %}<div class="invalid-feedback d-block">{{ form.delivered_date.errors|striptags }}</div>{% endif %}
+          </div>
+        </div>
+
+        <!-- ATTACHMENT -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="file" class="form-control{% if form.attachment.errors %} is-invalid{% endif %}"
+                   id="{{ form.attachment.id_for_label }}" name="{{ form.attachment.html_name }}" placeholder="Attachment">
+            <label for="{{ form.attachment.id_for_label }}">Attachment</label>
+            {% if form.attachment.errors %}<div class="invalid-feedback d-block">{{ form.attachment.errors|striptags }}</div>{% endif %}
+          </div>
+          <div class="form-text">Optional file (e.g., spec, screenshot).</div>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-end mt-4 gap-2">
+        <a href="{% url 'tasck:task_list' %}" class="btn btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

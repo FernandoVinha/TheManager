@@ -1,20 +1,6 @@
 # projects/services/gitea.py
 from __future__ import annotations
 
-"""
-Integração com a API do Gitea (sem dependências externas).
-
-Principais pontos:
-- Lê GITEA_BASE_URL e GITEA_ADMIN_TOKEN do settings.
-- Suporta owner sendo USUÁRIO ou ORGANIZAÇÃO (ensure_owner_exists / get_owner_kind).
-- Criação de repositório via POST /user/repos com header "Sudo: <owner>".
-- Adição/remoção de colaboradores e deleção de repositório.
-- Rotinas síncronas usando urllib.* (sem requests).
-
-Observações:
-- Use estas funções a partir de transações Django com transaction.on_commit(...)
-  quando forem chamadas dentro de signals, para evitar inconsistências.
-"""
 
 import json
 import urllib.error

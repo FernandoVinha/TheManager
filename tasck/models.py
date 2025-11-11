@@ -1,4 +1,3 @@
-# tasck/models.py
 from __future__ import annotations
 
 from django.conf import settings
@@ -12,9 +11,6 @@ User = settings.AUTH_USER_MODEL
 
 
 class Label(models.Model):
-    """
-    Rótulo simples, reutilizável entre tasks (ex.: "backend", "bug", "ux").
-    """
     name = models.CharField(max_length=40)
     color = models.CharField(
         max_length=9,
@@ -23,7 +19,9 @@ class Label(models.Model):
     )
 
     class Meta:
-        unique_together = (("name", "color"),)
+        constraints = [
+            models.UniqueConstraint(fields=["name", "color"], name="uniq_label_name_color"),
+        ]
         ordering = ["name"]
 
     def __str__(self) -> str:
@@ -35,9 +33,9 @@ class Task(models.Model):
         TODO = "todo", "To do"
         IN_PROGRESS = "in_progress", "In progress"
         REVIEW = "review", "In review"
-        VERIFIED = "verified", "Verified"   # → tentará PR+merge automático
+        VERIFIED = "verified", "Verified"
         DONE = "done", "Done"
-        FAILED = "failed", "Failed"         # → erro no merge/integração ou outros
+        FAILED = "failed", "Failed"
 
     class Priority(models.TextChoices):
         LOW = "low", "Low"
@@ -45,23 +43,14 @@ class Task(models.Model):
         HIGH = "high", "High"
         URGENT = "urgent", "Urgent"
 
-    project = models.ForeignKey(
-        Project, on_delete=models.CASCADE, related_name="tasks"
-    )
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="tasks")
 
     title = models.CharField(max_length=160)
-    key = models.SlugField(
-        max_length=64,
-        help_text="Short key (unique per project)",
-    )
+    key = models.SlugField(max_length=64, help_text="Short key (unique per project)")
     description = models.TextField(blank=True)
 
-    status = models.CharField(
-        max_length=20, choices=Status.choices, default=Status.TODO, db_index=True
-    )
-    priority = models.CharField(
-        max_length=16, choices=Priority.choices, default=Priority.MEDIUM, db_index=True
-    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.TODO, db_index=True)
+    priority = models.CharField(max_length=16, choices=Priority.choices, default=Priority.MEDIUM, db_index=True)
 
     reporter = models.ForeignKey(
         User, on_delete=models.PROTECT, related_name="reported_tasks",
@@ -74,29 +63,22 @@ class Task(models.Model):
 
     labels = models.ManyToManyField(Label, blank=True, related_name="tasks")
 
-    # Datas
-    due_date = models.DateField(
-        null=True, blank=True, help_text="Data prevista de entrega"
-    )
-    delivered_date = models.DateField(
-        null=True, blank=True, help_text="Data de entrega (real)"
-    )
+    due_date = models.DateField(null=True, blank=True)
+    delivered_date = models.DateField(null=True, blank=True)
 
-    # Metadados do fork no Gitea (criados quando a task é criada)
     gitea_fork_owner = models.CharField(max_length=120, blank=True)
     gitea_fork_name = models.CharField(max_length=120, blank=True)
     gitea_fork_url = models.URLField(blank=True)
 
-    # Anexo simples (opcional)
-    attachment = models.FileField(
-        upload_to="task_attachments/", null=True, blank=True
-    )
+    attachment = models.FileField(upload_to="task_attachments/", null=True, blank=True)
 
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = (("project", "key"),)
+        constraints = [
+            models.UniqueConstraint(fields=["project", "key"], name="uniq_task_project_key"),
+        ]
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["project", "status"]),
@@ -107,7 +89,6 @@ class Task(models.Model):
         return f"{self.project.key}-{self.key}: {self.title}"
 
     def save(self, *args, **kwargs):
-        # Se não vier uma key, gera um slug do título (limitado ao tamanho do campo)
         if not self.key:
             base = slugify(self.title)[: self._meta.get_field("key").max_length]
             self.key = base or "task"
@@ -115,10 +96,6 @@ class Task(models.Model):
 
 
 class TaskMember(models.Model):
-    """
-    Membros por task, com papel semelhante ao de ProjectMember.
-    Útil quando uma task tem colaboradores específicos com papéis distintos.
-    """
     class Role(models.TextChoices):
         OWNER = "owner", "Owner"
         MAINTAINER = "maintainer", "Maintainer"
@@ -126,58 +103,73 @@ class TaskMember(models.Model):
         REPORTER = "reporter", "Reporter"
         GUEST = "guest", "Guest"
 
-    task = models.ForeignKey(
-        Task, on_delete=models.CASCADE, related_name="memberships"
-    )
-    user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="task_memberships"
-    )
-    role = models.CharField(
-        max_length=16, choices=Role.choices, default=Role.DEVELOPER
-    )
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="memberships")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="task_memberships")
+    role = models.CharField(max_length=16, choices=Role.choices, default=Role.DEVELOPER)
 
     class Meta:
-        unique_together = (("task", "user"),)
+        constraints = [
+            models.UniqueConstraint(fields=["task", "user"], name="uniq_task_member"),
+        ]
 
     def __str__(self) -> str:
         return f"{self.user} @ {self.task} ({self.role})"
 
 
 class TaskMessage(models.Model):
-    """
-    Mensageria básica por Task:
-    - `author_name` é texto livre (pode ser humano, bot, agente externo, etc.)
-    - `agent` classifica a origem (user/gitea/system)
-    - `payload` guarda metadados (ex.: respostas da API do Gitea)
-    """
     class Agent(models.TextChoices):
         USER = "user", "User"
         GITEA = "gitea", "Gitea"
         SYSTEM = "system", "System"
 
-    task = models.ForeignKey(
-        Task, on_delete=models.CASCADE, related_name="messages"
-    )
-    agent = models.CharField(
-        max_length=16, choices=Agent.choices, default=Agent.USER
-    )
-    author_name = models.CharField(
-        max_length=120, blank=True,
-        help_text="Nome livre do autor (pessoa, bot ou agente externo)"
-    )
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="messages")
+    agent = models.CharField(max_length=16, choices=Agent.choices, default=Agent.USER)
+    author_name = models.CharField(max_length=120, blank=True, help_text="Nome livre do autor")
     text = models.TextField()
-    payload = models.JSONField(
-        null=True, blank=True,
-        help_text="Metadata opcional, ex.: resposta crua da API"
-    )
+    payload = models.JSONField(null=True, blank=True, help_text="Metadata opcional (ex.: resposta da API do Gitea)")
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
         ordering = ["created_at", "pk"]
-        indexes = [
-            models.Index(fields=["task", "created_at"]),
-        ]
+        indexes = [models.Index(fields=["task", "created_at"])]
 
     def __str__(self) -> str:
         who = self.author_name or self.get_agent_display()
         return f"[{who}] {self.text[:60]}"
+
+
+class TaskCommit(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="commits")
+    sha = models.CharField(max_length=64, db_index=True)
+
+    author_name = models.CharField(max_length=160, blank=True)
+    author_email = models.CharField(max_length=160, blank=True)
+    committed_date = models.DateTimeField(null=True, blank=True)
+
+    title = models.CharField(max_length=300)
+    message = models.TextField(blank=True)
+
+    additions = models.IntegerField(default=0)
+    deletions = models.IntegerField(default=0)
+    files_changed = models.IntegerField(default=0)
+
+    html_url = models.URLField(blank=True)
+
+    code_quality_text = models.TextField(blank=True)
+    resolution_text = models.TextField(blank=True)
+    processed = models.BooleanField(default=False, help_text="Se este commit já foi processado por IA.")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["task", "sha"], name="uniq_task_commit_sha"),
+        ]
+        ordering = ["-committed_date", "-id"]
+        indexes = [
+            models.Index(fields=["task", "sha"]),
+            models.Index(fields=["task", "committed_date"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.sha[:7]} — {self.title}"

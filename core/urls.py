@@ -8,6 +8,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("", include("accounts.urls")),  # signup/login/lista do Gitea
     path("projects/", include("projects.urls")),
+    path("", include(("tasck.urls", "tasck"), namespace="tasck")),
 ]
 
 if settings.DEBUG:

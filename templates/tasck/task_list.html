@@ -1,0 +1,70 @@
+{% extends "base_sidebar.html" %}
+{% load static %}
+
+{% block title %}Tasks{% endblock %}
+
+{% block content %}
+<div class="og-card p-3">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h5 m-0">Tasks</h1>
+    <a href="{% url 'tasck:task_create' %}" class="btn btn-primary btn-sm">New task</a>
+  </div>
+
+  <form class="row g-2 mb-3" method="get">
+    <div class="col-md-6">
+      <input type="search" name="q" class="form-control" placeholder="Search…" value="{{ request.GET.q }}">
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-outline-secondary" type="submit">Filter</button>
+    </div>
+  </form>
+
+  <div class="table-responsive">
+    <table class="table align-middle">
+      <thead>
+        <tr>
+          <th>Key</th>
+          <th>Title</th>
+          <th>Project</th>
+          <th>Status</th>
+          <th>Priority</th>
+          <th>Assignee</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for t in tasks %}
+        <tr>
+          <td>{{ t.project.key }}-{{ t.key }}</td>
+          <td><a href="{% url 'tasck:task_detail' pk=t.pk %}">{{ t.title }}</a></td>
+          <td>{{ t.project.name }}</td>
+          <td><span class="badge text-bg-light">{{ t.get_status_display }}</span></td>
+          <td><span class="badge text-bg-secondary">{{ t.get_priority_display }}</span></td>
+          <td>{{ t.assignee|default:"—" }}</td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-outline-secondary" href="{% url 'tasck:task_update' pk=t.pk %}">Edit</a>
+            <a class="btn btn-sm btn-outline-danger" href="{% url 'tasck:task_delete' pk=t.pk %}">Delete</a>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="text-center text-muted py-4">No tasks found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if is_paginated %}
+  <div class="d-flex justify-content-between align-items-center">
+    <div>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</div>
+    <div class="btn-group">
+      {% if page_obj.has_previous %}
+        <a class="btn btn-outline-secondary btn-sm" href="?page={{ page_obj.previous_page_number }}&q={{ request.GET.q }}">Prev</a>
+      {% endif %}
+      {% if page_obj.has_next %}
+        <a class="btn btn-outline-secondary btn-sm" href="?page={{ page_obj.next_page_number }}&q={{ request.GET.q }}">Next</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

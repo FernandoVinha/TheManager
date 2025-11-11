@@ -1,0 +1,98 @@
+{% extends "base_sidebar.html" %}
+{% load static %}
+
+{% block title %}{{ task.project.key }}-{{ task.key }}{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="og-card p-3">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h1 class="h5 m-0">{{ task.project.key }}-{{ task.key }} — {{ task.title }}</h1>
+        <div class="btn-group">
+          <a class="btn btn-sm btn-outline-secondary" href="{% url 'tasck:task_update' pk=task.pk %}">Edit</a>
+          <a class="btn btn-sm btn-outline-danger" href="{% url 'tasck:task_delete' pk=task.pk %}">Delete</a>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <span class="badge text-bg-light">{{ task.get_status_display }}</span>
+        <span class="badge text-bg-secondary">{{ task.get_priority_display }}</span>
+        {% if task.assignee %}<span class="badge text-bg-info">{{ task.assignee }}</span>{% endif %}
+      </div>
+
+      <p class="mb-0">{{ task.description|linebreaksbr }}</p>
+    </div>
+
+    <!-- Messages -->
+    <div class="og-card p-3 mt-3">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h2 class="h6 m-0">Messages</h2>
+      </div>
+
+      <div class="vstack gap-2 mb-3">
+        {% for m in messages_list %}
+          <div class="p-2 border rounded">
+            <div class="small text-muted">{{ m.created_at|date:"Y-m-d H:i" }} — {{ m.author_name|default:m.get_agent_display }}</div>
+            <div>{{ m.text|linebreaksbr }}</div>
+          </div>
+        {% empty %}
+          <div class="text-muted">No messages yet.</div>
+        {% endfor %}
+      </div>
+
+      <form method="post" class="mt-2">
+        {% csrf_token %}
+        <div class="form-floating">
+          {{ message_form.text }}
+          <label for="{{ message_form.text.id_for_label }}">Write a message…</label>
+        </div>
+        <div class="mt-2 d-flex justify-content-end">
+          <button class="btn btn-primary">Post</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <!-- Meta -->
+    <div class="og-card p-3">
+      <h2 class="h6">Meta</h2>
+      <div class="small text-muted">Reporter</div>
+      <div class="mb-2">{{ task.reporter }}</div>
+
+      <div class="small text-muted">Due date</div>
+      <div class="mb-2">{{ task.due_date|default:"—" }}</div>
+
+      <div class="small text-muted">Delivered date</div>
+      <div class="mb-2">{{ task.delivered_date|default:"—" }}</div>
+
+      {% if task.gitea_fork_url %}
+        <div class="small text-muted">Fork</div>
+        <div class="mb-2"><a href="{{ task.gitea_fork_url }}" target="_blank" rel="noopener">Open in Gitea</a></div>
+      {% endif %}
+
+      <a class="btn btn-outline-secondary btn-sm" href="{% url 'tasck:task_members' pk=task.pk %}">Manage members</a>
+    </div>
+
+    <!-- Commits -->
+    <div class="og-card p-3 mt-3">
+      <h2 class="h6">Commits</h2>
+      <div class="vstack gap-2">
+        {% for c in commits_list %}
+          <div class="border rounded p-2">
+            <div class="small text-muted">{{ c.committed_date|date:"Y-m-d H:i" }} — {{ c.author_name|default:"" }}</div>
+            <div class="fw-semibold mb-1">{{ c.title }}</div>
+            <div class="d-flex justify-content-between">
+              <a class="small" href="{% url 'tasck:commit_detail' task_id=task.id sha=c.sha %}">Review</a>
+              {% if c.html_url %}<a class="small" href="{{ c.html_url }}" target="_blank" rel="noopener">View in Gitea</a>{% endif %}
+            </div>
+          </div>
+        {% empty %}
+          <div class="text-muted">No commits registered.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
