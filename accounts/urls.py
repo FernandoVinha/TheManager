@@ -15,7 +15,7 @@ from .views import (
 
 urlpatterns = [
     # Auth
-    path("login/", SignInView.as_view(), name="login"),
+    path("", SignInView.as_view(), name="login"),
     path("logout/", SignOutView.as_view(), name="logout"),
 
     # Landing pós-login

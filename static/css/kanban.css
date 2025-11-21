@@ -1,0 +1,12 @@
+.kanban-column {
+  min-height: 400px;
+}
+
+.task-card.dragging {
+  opacity: 0.4;
+}
+
+.kanban-dropzone.drag-over {
+  background: #ece8ff55; /* roxo transparente suave */
+  border-radius: 8px;
+}

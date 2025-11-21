@@ -5,6 +5,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
 from django.utils.crypto import get_random_string
+from datetime import timedelta
 
 
 class User(AbstractUser):
@@ -203,14 +204,19 @@ class UserInvite(models.Model):
         """
         Cria (ou substitui) um token novo para o usuário informado.
         """
-        # Garante existir só um token por usuário
         UserInvite.objects.filter(user=user).delete()
 
         token = get_random_string(56)
         expires = (
-            timezone.now() + timezone.timedelta(days=validity_days)
-            if validity_days else
-            None
+            timezone.now() + timedelta(days=validity_days)
+            if validity_days
+            else None
+        )
+
+        return UserInvite.objects.create(
+            user=user,
+            token=token,
+            expires_at=expires,
         )
 
         return UserInvite.objects.create(

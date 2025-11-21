@@ -1,9 +1,17 @@
-# tasck/urls.py
 from django.urls import path
 from .views import (
-    TaskListView, TaskCreateView, TaskDetailView, TaskUpdateView, TaskDeleteView,
-    TaskMembersView, TaskMemberDeleteView, ProjectKanbanView, KanbanStatusUpdateView,
-    ProjectTaskListView, TaskCommitDetailView,
+    TaskListView,
+    TaskCreateView,
+    TaskDetailView,
+    TaskUpdateView,
+    TaskDeleteView,
+    TaskMembersView,
+    TaskMemberDeleteView,
+    ProjectKanbanView,
+    KanbanStatusUpdateView,
+    ProjectTaskListView,
+    TaskCommitDetailView,
+    LabelCreateAjaxView,
 )
 
 app_name = "tasck"
@@ -16,19 +24,15 @@ urlpatterns = [
     path("tasks/<int:pk>/delete/", TaskDeleteView.as_view(), name="task_delete"),
 
     path("tasks/<int:pk>/members/", TaskMembersView.as_view(), name="task_members"),
-    path("tasks/<int:pk>/members/<int:user_id>/delete/", TaskMemberDeleteView.as_view(),
-         name="task_member_delete"),
+    path("tasks/<int:pk>/members/<int:user_id>/delete/", TaskMemberDeleteView.as_view(), name="task_member_delete"),
 
-    # Kanban (por projeto) + atualização de status via AJAX (se usar)
+    # Kanban por projeto
     path("projects/<int:project_id>/kanban/", ProjectKanbanView.as_view(), name="project_kanban"),
-    path("projects/<int:project_id>/kanban/<int:task_id>/move/", KanbanStatusUpdateView.as_view(),
-         name="kanban_status_update"),
+    path("projects/<int:project_id>/kanban/status/<int:task_id>/", KanbanStatusUpdateView.as_view(), name="kanban_status_update"),
 
-    # Lista de tasks por projeto (tabela)
-    path("projects/<int:project_id>/tasks/", ProjectTaskListView.as_view(),
-         name="project_task_list"),
+    path("projects/<int:project_id>/tasks/", ProjectTaskListView.as_view(), name="project_task_list"),
 
-    # Commit viewer/editor
-    path("tasks/<int:task_id>/commits/<str:sha>/", TaskCommitDetailView.as_view(),
-         name="commit_detail"),
+    path("tasks/<int:task_id>/commits/<str:sha>/", TaskCommitDetailView.as_view(), name="commit_detail"),
+
+    path("labels/ajax/create/", LabelCreateAjaxView.as_view(), name="label_create_ajax"),
 ]

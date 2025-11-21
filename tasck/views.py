@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
@@ -8,10 +10,16 @@ from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.views import View
-from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
+from django.views.generic import (
+    ListView,
+    DetailView,
+    CreateView,
+    UpdateView,
+    DeleteView,
+)
 
 from projects.models import Project, ProjectMember
-from .models import Task, TaskMember, TaskMessage, TaskCommit
+from .models import Task, TaskMember, TaskMessage, TaskCommit, Label
 from .forms import (
     TaskForm,
     TaskMemberForm,
@@ -28,6 +36,7 @@ from .forms import (
 def _user_display_name(user) -> str:
     return getattr(user, "display_name", None) or user.get_username()
 
+
 def _user_is_project_member(user, project: Project) -> bool:
     if not user.is_authenticated:
         return False
@@ -35,10 +44,12 @@ def _user_is_project_member(user, project: Project) -> bool:
         return True
     return ProjectMember.objects.filter(project=project, user=user).exists()
 
+
 def _user_can_view_project(user, project: Project) -> bool:
     if getattr(user, "can_manage_projects", False):
         return True
     return _user_is_project_member(user, project)
+
 
 def _user_can_edit_project(user, project: Project) -> bool:
     if getattr(user, "can_manage_projects", False):
@@ -57,32 +68,36 @@ class TaskListView(LoginRequiredMixin, ListView):
     paginate_by = 20
 
     def get_queryset(self):
-        qs = (super().get_queryset()
-              .select_related("project", "assignee", "reporter")
-              .prefetch_related("labels"))
+        qs = (
+            super()
+            .get_queryset()
+            .select_related("project", "assignee", "reporter")
+            .prefetch_related("labels")
+        )
         user = self.request.user
         q = self.request.GET.get("q")
 
+        # Admin global de projetos
         if getattr(user, "can_manage_projects", False):
             if q:
                 qs = qs.filter(
-                    Q(title__icontains=q) |
-                    Q(description__icontains=q) |
-                    Q(project__name__icontains=q) |
-                    Q(key__icontains=q)
+                    Q(title__icontains=q)
+                    | Q(description__icontains=q)
+                    | Q(project__name__icontains=q)
+                    | Q(key__icontains=q)
                 )
             return qs.order_by("-created_at")
 
+        # Usuário normal: só vê tasks de projetos onde é owner ou membro
         qs = qs.filter(
-            Q(project__owner=user) |
-            Q(project__memberships__user=user)
+            Q(project__owner=user) | Q(project__memberships__user=user)
         ).distinct()
         if q:
             qs = qs.filter(
-                Q(title__icontains=q) |
-                Q(description__icontains=q) |
-                Q(project__name__icontains=q) |
-                Q(key__icontains=q)
+                Q(title__icontains=q)
+                | Q(description__icontains=q)
+                | Q(project__name__icontains=q)
+                | Q(key__icontains=q)
             )
         return qs.order_by("-created_at")
 
@@ -116,7 +131,9 @@ class TaskCreateView(LoginRequiredMixin, CreateView):
         Passa o project para o form (para filtrar assignee aos membros).
         """
         kwargs = super().get_form_kwargs()
-        kwargs["project"] = self.fixed_project or kwargs.get("instance", None) and kwargs["instance"].project
+        instance = kwargs.get("instance")
+        project = self.fixed_project or (instance.project if instance else None)
+        kwargs["project"] = project
         return kwargs
 
     def get_form(self, form_class=None):
@@ -125,11 +142,12 @@ class TaskCreateView(LoginRequiredMixin, CreateView):
         """
         form = super().get_form(form_class)
         if self.fixed_project:
-            # limita o queryset a apenas o projeto fixado
-            form.fields["project"].queryset = Project.objects.filter(pk=self.fixed_project.pk)
-            form.fields["project"].initial = self.fixed_project.pk
-            # esconde no HTML (vamos mostrar um read-only bonito no template)
             from django import forms as djforms
+
+            form.fields["project"].queryset = Project.objects.filter(
+                pk=self.fixed_project.pk
+            )
+            form.fields["project"].initial = self.fixed_project.pk
             form.fields["project"].widget = djforms.HiddenInput()
         return form
 
@@ -146,23 +164,25 @@ class TaskCreateView(LoginRequiredMixin, CreateView):
 
     def get_success_url(self):
         return reverse("tasck:task_detail", kwargs={"pk": self.object.pk})
-    
-    
+
+
 class TaskDetailView(LoginRequiredMixin, DetailView):
     model = Task
     template_name = "tasck/task_detail.html"
     context_object_name = "task"
 
     def get_queryset(self):
-        qs = (super().get_queryset()
-              .select_related("project", "assignee", "reporter")
-              .prefetch_related("labels", "memberships__user", "messages", "commits"))
+        qs = (
+            super()
+            .get_queryset()
+            .select_related("project", "assignee", "reporter")
+            .prefetch_related("labels", "memberships__user", "messages", "commits")
+        )
         user = self.request.user
         if getattr(user, "can_manage_projects", False):
             return qs
         return qs.filter(
-            Q(project__owner=user) |
-            Q(project__memberships__user=user)
+            Q(project__owner=user) | Q(project__memberships__user=user)
         ).distinct()
 
     def get_context_data(self, **kwargs):
@@ -174,7 +194,7 @@ class TaskDetailView(LoginRequiredMixin, DetailView):
 
     def post(self, request, *args, **kwargs):
         """
-        Post de mensagem (text). author_name é preenchido automaticamente.
+        Post de mensagem (texto). author_name é preenchido automaticamente.
         """
         self.object = self.get_object()
         user = request.user
@@ -204,7 +224,10 @@ class TaskUpdateView(LoginRequiredMixin, UpdateView):
 
     def dispatch(self, request, *args, **kwargs):
         self.object = self.get_object()
-        if not (_user_can_edit_project(request.user, self.object.project) or self.object.reporter_id == request.user.id):
+        if not (
+            _user_can_edit_project(request.user, self.object.project)
+            or self.object.reporter_id == request.user.id
+        ):
             raise PermissionDenied("You cannot edit this task.")
         return super().dispatch(request, *args, **kwargs)
 
@@ -247,7 +270,11 @@ class TaskMembersView(LoginRequiredMixin, View):
             raise PermissionDenied("You cannot manage members for this task.")
         form = TaskMemberForm()
         memberships = task.memberships.select_related("user").all()
-        return render(request, self.template_name, {"task": task, "form": form, "memberships": memberships})
+        return render(
+            request,
+            self.template_name,
+            {"task": task, "form": form, "memberships": memberships},
+        )
 
     def post(self, request, pk):
         task = self._get_task(pk)
@@ -260,14 +287,20 @@ class TaskMembersView(LoginRequiredMixin, View):
             member.task = task
             exists = TaskMember.objects.filter(task=task, user=member.user).exists()
             if exists:
-                messages.warning(request, "This user is already a member of the task.")
+                messages.warning(
+                    request, "This user is already a member of the task."
+                )
             else:
                 member.save()
                 messages.success(request, "Member added to task.")
             return redirect("tasck:task_members", pk=task.pk)
 
         memberships = task.memberships.select_related("user").all()
-        return render(request, self.template_name, {"task": task, "form": form, "memberships": memberships})
+        return render(
+            request,
+            self.template_name,
+            {"task": task, "form": form, "memberships": memberships},
+        )
 
 
 class TaskMemberDeleteView(LoginRequiredMixin, View):
@@ -280,6 +313,10 @@ class TaskMemberDeleteView(LoginRequiredMixin, View):
         return redirect("tasck:task_members", pk=task.pk)
 
 
+# =========================
+# Kanban
+# =========================
+
 class ProjectKanbanView(LoginRequiredMixin, View):
     template_name = "tasck/kanban.html"
 
@@ -291,12 +328,19 @@ class ProjectKanbanView(LoginRequiredMixin, View):
         form = KanbanFilterForm(request.GET or None)
         q = form.cleaned_data.get("q") if form.is_valid() else ""
 
-        qs = (Task.objects.filter(project=project)
-              .select_related("assignee", "reporter")
-              .prefetch_related("labels"))
+        qs = (
+            Task.objects.filter(project=project)
+            .select_related("assignee", "reporter")
+            .prefetch_related("labels")
+        )
         if q:
-            qs = qs.filter(Q(title__icontains=q) | Q(description__icontains=q) | Q(key__icontains=q))
+            qs = qs.filter(
+                Q(title__icontains=q)
+                | Q(description__icontains=q)
+                | Q(key__icontains=q)
+            )
 
+        # Dicionário de colunas: status -> lista de tasks
         columns = {
             Task.Status.TODO: [],
             Task.Status.IN_PROGRESS: [],
@@ -313,6 +357,11 @@ class ProjectKanbanView(LoginRequiredMixin, View):
 
 
 class KanbanStatusUpdateView(LoginRequiredMixin, View):
+    """
+    Atualização de status usada pelo drag & drop do Kanban.
+    URL: /projects/<project_id>/kanban/status/<task_id>/
+    Método: POST, campo "status"
+    """
     def post(self, request: HttpRequest, project_id: int, task_id: int) -> JsonResponse:
         project = get_object_or_404(Project, pk=project_id)
         task = get_object_or_404(Task, pk=task_id, project=project)
@@ -341,15 +390,29 @@ class ProjectTaskListView(LoginRequiredMixin, View):
         form = KanbanFilterForm(request.GET or None)
         q = form.cleaned_data.get("q") if form.is_valid() else ""
 
-        qs = (Task.objects.filter(project=project)
-              .select_related("assignee", "reporter")
-              .prefetch_related("labels"))
+        qs = (
+            Task.objects.filter(project=project)
+            .select_related("assignee", "reporter")
+            .prefetch_related("labels")
+        )
         if q:
-            qs = qs.filter(Q(title__icontains=q) | Q(description__icontains=q) | Q(key__icontains=q))
+            qs = qs.filter(
+                Q(title__icontains=q)
+                | Q(description__icontains=q)
+                | Q(key__icontains=q)
+            )
 
         tasks = qs.order_by("-created_at")
-        return render(request, self.template_name, {"project": project, "tasks": tasks, "form": form})
+        return render(
+            request,
+            self.template_name,
+            {"project": project, "tasks": tasks, "form": form},
+        )
 
+
+# =========================
+# Commits da Task
+# =========================
 
 class TaskCommitDetailView(LoginRequiredMixin, View):
     """
@@ -364,7 +427,11 @@ class TaskCommitDetailView(LoginRequiredMixin, View):
 
         commit = get_object_or_404(TaskCommit, task=task, sha=sha)
         form = TaskCommitReviewForm(instance=commit)
-        return render(request, self.template_name, {"task": task, "commit": commit, "form": form})
+        return render(
+            request,
+            self.template_name,
+            {"task": task, "commit": commit, "form": form},
+        )
 
     def post(self, request, task_id: int, sha: str):
         task = get_object_or_404(Task, pk=task_id)
@@ -378,4 +445,43 @@ class TaskCommitDetailView(LoginRequiredMixin, View):
             messages.success(request, "Commit notes saved.")
             return redirect("tasck:commit_detail", task_id=task.id, sha=commit.sha)
 
-        return render(request, self.template_name, {"task": task, "commit": commit, "form": form})
+        return render(
+            request,
+            self.template_name,
+            {"task": task, "commit": commit, "form": form},
+        )
+
+
+# =========================
+# Labels — AJAX create
+# =========================
+
+class LabelCreateAjaxView(LoginRequiredMixin, View):
+    """
+    Cria Label via AJAX.
+    POST: name, color (#rrggbb opcional)
+    """
+    def post(self, request):
+        name = (request.POST.get("name") or "").strip()
+        color = (request.POST.get("color") or "#6b4ce6").strip() or "#6b4ce6"
+        if not name:
+            return JsonResponse(
+                {"ok": False, "error": "Name is required"}, status=400
+            )
+
+        label, created = Label.objects.get_or_create(
+            name=name, defaults={"color": color}
+        )
+        if not created and label.color != color and color:
+            label.color = color
+            label.save(update_fields=["color"])
+
+        return JsonResponse(
+            {
+                "ok": True,
+                "id": label.id,
+                "name": label.name,
+                "color": label.color,
+                "created": created,
+            }
+        )

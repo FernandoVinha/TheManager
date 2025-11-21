@@ -57,17 +57,23 @@
 
       <div class="card-body">
         {% if columns %}
-          <div class="row g-3">
-            {% for status_label, items in columns.items %}
+          {# RAIZ DO KANBAN (para o JS saber o project_id) #}
+          <div class="row g-3" id="kanbanRoot" data-project-id="{{ project.id }}">
+            {# columns: status -> lista de tasks #}
+            {% for status, items in columns.items %}
               <div class="col-12 col-lg-4">
-                <div class="og-card p-2">
+                <div class="og-card p-2 kanban-column" data-status="{{ status }}">
                   <div class="px-2 py-1 border-bottom d-flex justify-content-between align-items-center">
-                    <strong>{{ status_label }}</strong>
+                    {# AQUI era o replace -> removido #}
+                    <strong>{{ status|title }}</strong>
                     <span class="badge text-bg-light">{{ items|length }}</span>
                   </div>
-                  <div class="vstack gap-2 p-2">
+                  <div class="vstack gap-2 p-2 kanban-dropzone">
                     {% for t in items %}
-                      <div class="border rounded p-2">
+                      <div class="task-card border rounded p-2"
+                           draggable="true"
+                           data-task-id="{{ t.pk }}"
+                           style="cursor: grab;">
                         <div class="small text-muted">{{ t.project.key }}-{{ t.key }}</div>
                         <div class="fw-semibold">
                           <a href="{% url 'tasck:task_detail' pk=t.pk %}">{{ t.title }}</a>
@@ -78,7 +84,7 @@
                         </div>
                       </div>
                     {% empty %}
-                      <div class="text-muted">Empty</div>
+                      <div class="text-muted empty-msg">Empty</div>
                     {% endfor %}
                   </div>
                 </div>
@@ -133,4 +139,127 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  console.log("Kanban JS (Project Detail) carregado");
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const root = document.getElementById("kanbanRoot");
+    if (!root) {
+      console.warn("kanbanRoot não encontrado");
+      return;
+    }
+
+    const projectId = root.dataset.projectId;
+    let dragged = null;
+
+    // =============== DRAG START / END ===============
+    function attachCardEvents(card) {
+      card.addEventListener("dragstart", (e) => {
+        dragged = card;
+        card.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+      });
+
+      card.addEventListener("dragend", () => {
+        if (dragged) {
+          dragged.classList.remove("dragging");
+          dragged = null;
+        }
+      });
+    }
+
+    document.querySelectorAll(".task-card").forEach(attachCardEvents);
+
+    // =============== DROP ZONES (COLUMNS) ===============
+    document.querySelectorAll(".kanban-dropzone").forEach((zone) => {
+      zone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        zone.classList.add("drag-over");
+        e.dataTransfer.dropEffect = "move";
+      });
+
+      zone.addEventListener("dragleave", (e) => {
+        if (!zone.contains(e.relatedTarget)) {
+          zone.classList.remove("drag-over");
+        }
+      });
+
+      zone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        zone.classList.remove("drag-over");
+        if (!dragged) return;
+
+        const taskId = dragged.dataset.taskId;
+        const column = zone.closest(".kanban-column");
+        if (!column) return;
+
+        const newStatus = column.dataset.status;
+
+        // move visualmente
+        zone.appendChild(dragged);
+
+        // remove "Empty" se existir
+        const emptyMsg = zone.querySelector(".empty-msg");
+        if (emptyMsg) {
+          emptyMsg.remove();
+        }
+
+        // atualiza no backend
+        updateTaskStatus(projectId, taskId, newStatus);
+      });
+    });
+  });
+
+  // =============== AJAX REQUEST ===============
+  function updateTaskStatus(projectId, taskId, status) {
+    const url = `/projects/${projectId}/kanban/status/${taskId}/`;
+
+    const body = new URLSearchParams();
+    body.append("status", status);
+
+    fetch(url, {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": getCookie("csrftoken"),
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: body.toString(),
+    })
+      .then((r) => {
+        if (!r.ok) {
+          throw new Error("HTTP " + r.status);
+        }
+        return r.json();
+      })
+      .then((data) => {
+        if (!data.ok) {
+          console.error("Erro do servidor:", data);
+          alert("Failed to update task: " + (data.error || "unknown error"));
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        alert("Failed to update task status.");
+      });
+  }
+
+  // =============== CSRF helper ===============
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== "") {
+      const cookies = document.cookie.split(";");
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === name + "=") {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+</script>
 {% endblock %}

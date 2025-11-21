@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     "accounts",
     "projects",
     "tasck",
+
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -259,3 +260,6 @@ LOGGING = {
 # ======================================================
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+
+ROOT_URLCONF = "core.urls"

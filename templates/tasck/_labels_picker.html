@@ -1,0 +1,215 @@
+{# context: precisa de "form" com form.labels; URL 'tasck:label_create_ajax' configurada #}
+<style>
+  .label-picker { border:1px solid var(--border, #e6e9f0); border-radius:12px; padding:12px; background:#fff; }
+  .label-chips { display:flex; flex-wrap:wrap; align-items:center; }
+  .label-chip {
+    display:inline-flex; align-items:center; gap:.5rem;
+    border:1px solid #d0d6e0; border-radius:999px; padding:.30rem .70rem; margin:.25rem;
+    cursor:pointer; background:#f8fafc; user-select:none; transition:background .15s,border-color .15s;
+  }
+  .label-chip .dot { width:.66rem; height:.66rem; border-radius:50%; display:inline-block; }
+  .label-chip.active { background:#e8efff; border-color:#bcd0ff; }
+  .label-chip.add { border:1px dashed #6b4ce6; color:#6b4ce6; background:#fff; }
+  .label-chip.add .dot{ display:none; }
+  .label-input { border-radius:10px; }
+
+  .newlabel-wrap{
+    width:100%; margin:.25rem; border:1px dashed #cdd6ee; border-radius:12px; padding:.75rem;
+    background:#f9fbff; display:none;
+  }
+  .newlabel-wrap .form-control, .newlabel-wrap .form-select{ height:36px; }
+  .newlabel-actions .btn{ height:36px; }
+</style>
+
+<div class="label-picker" data-endpoint="{% url 'tasck:label_create_ajax' %}">
+  <div class="d-flex align-items-center gap-2 mb-2">
+    <input type="text" class="form-control form-control-sm label-input" placeholder="Filter labels by name…" id="labelFilter">
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="btnClearLabels">Clear</button>
+    <span class="ms-auto small text-muted"><span id="selCount">0</span> selected</span>
+  </div>
+
+  {# select múltiplo escondido que o Django processa #}
+  <select name="{{ form.labels.html_name }}" id="labelsHiddenSelect" multiple hidden>
+    {% for opt in form.labels.field.queryset %}
+      {% with sid=opt.id|stringformat:'s' %}
+        <option value="{{ opt.id }}"
+          {% if form.labels.value and sid in form.labels.value %}selected{% endif %}>
+          {{ opt.name }}
+        </option>
+      {% endwith %}
+    {% endfor %}
+  </select>
+
+  <div id="labelChips" class="label-chips">
+    {# PRIMEIRO chip: Add new label #}
+    <div class="label-chip add" id="chipAddNew">
+      <span class="name">+ Add new label</span>
+    </div>
+
+    {# DEMAIS chips existentes #}
+    {% for opt in form.labels.field.queryset %}
+      {% with sid=opt.id|stringformat:'s' %}
+      <div class="label-chip {% if form.labels.value and sid in form.labels.value %}active{% endif %}"
+           data-id="{{ opt.id }}" data-name="{{ opt.name|escape }}" data-color="{{ opt.color|default:'#6b4ce6' }}">
+        <span class="dot" style="background: {{ opt.color|default:'#6b4ce6' }}"></span>
+        <span class="name">{{ opt.name }}</span>
+      </div>
+      {% endwith %}
+    {% empty %}
+      {# sem labels, só fica o chip Add new #}
+    {% endfor %}
+  </div>
+
+  {# FORM embutido (inline), aparece ao clicar no chip Add new #}
+  <div class="newlabel-wrap" id="newLabelWrap">
+    <div class="row g-2 align-items-center">
+      <div class="col-sm-6">
+        <input type="text" class="form-control" id="newLabelName" placeholder="Label name (e.g., bug, backend)">
+      </div>
+      <div class="col-sm-3 d-flex align-items-center gap-2">
+        <label class="form-label m-0 small text-muted">Color</label>
+        <input type="color" class="form-control form-control-color p-0" id="newLabelColor" value="#6b4ce6" title="Pick color">
+      </div>
+      <div class="col-sm-3 newlabel-actions d-flex gap-2 justify-content-end">
+        <button type="button" class="btn btn-primary btn-sm" id="btnCreateLabel">Create</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnCancelNew">Cancel</button>
+      </div>
+    </div>
+    <div class="small text-muted mt-1">The new label will be saved and selected automatically.</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const root = document.currentScript.previousElementSibling.closest('.label-picker');
+  const chipsWrap = root.querySelector('#labelChips');
+  const chipAdd = root.querySelector('#chipAddNew');
+  const hiddenSelect = root.querySelector('#labelsHiddenSelect');
+  const filterInput = root.querySelector('#labelFilter');
+  const btnClear = root.querySelector('#btnClearLabels');
+  const selCount = root.querySelector('#selCount');
+  const endpoint = root.dataset.endpoint;
+
+  const newWrap = root.querySelector('#newLabelWrap');
+  const newName = root.querySelector('#newLabelName');
+  const newColor = root.querySelector('#newLabelColor');
+  const btnCreate = root.querySelector('#btnCreateLabel');
+  const btnCancel = root.querySelector('#btnCancelNew');
+
+  function selectedIds(){
+    return new Set(Array.from(hiddenSelect.selectedOptions).map(o => o.value));
+  }
+  function setSelected(id, on){
+    const opt = Array.from(hiddenSelect.options).find(o => o.value === String(id));
+    if (!opt) return;
+    opt.selected = !!on;
+    updateCount();
+  }
+  function updateCount(){ selCount.textContent = hiddenSelect.selectedOptions.length; }
+
+  // click nos chips (toggle)
+  chipsWrap.addEventListener('click', (e) => {
+    const chip = e.target.closest('.label-chip');
+    if (!chip || chip.id === 'chipAddNew') return; // add new é tratado abaixo
+    chip.classList.toggle('active');
+    setSelected(chip.dataset.id, chip.classList.contains('active'));
+  });
+
+  // filtro
+  filterInput.addEventListener('input', function(){
+    const q = this.value.trim().toLowerCase();
+    for (const chip of chipsWrap.querySelectorAll('.label-chip')){
+      if (chip.id === 'chipAddNew') continue; // botão sempre visível
+      const name = (chip.dataset.name || chip.querySelector('.name')?.textContent || '').toLowerCase();
+      chip.style.display = name.includes(q) ? '' : 'none';
+    }
+  });
+
+  // clear
+  btnClear.addEventListener('click', () => {
+    for (const chip of chipsWrap.querySelectorAll('.label-chip')){
+      if (chip.id === 'chipAddNew') continue;
+      chip.classList.remove('active');
+    }
+    for (const opt of hiddenSelect.options){ opt.selected = false; }
+    updateCount();
+  });
+
+  // abrir/fechar form inline
+  function openNewForm(){
+    newWrap.style.display = 'block';
+    newName.focus();
+  }
+  function closeNewForm(){
+    newWrap.style.display = 'none';
+    newName.value = '';
+    newColor.value = '#6b4ce6';
+  }
+  chipAdd.addEventListener('click', openNewForm);
+  btnCancel.addEventListener('click', closeNewForm);
+
+  // CSRF
+  function getCookie(name){
+    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return m ? m.pop() : '';
+  }
+
+  // criar label via AJAX
+  btnCreate.addEventListener('click', async () => {
+    const name = (newName.value || '').trim();
+    const color = (newColor.value || '#6b4ce6').trim() || '#6b4ce6';
+    if (!name) { newName.focus(); return; }
+
+    try{
+      const resp = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": getCookie('csrftoken'),
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({name, color}).toString()
+      });
+      const data = await resp.json();
+      if(!data.ok){ alert(data.error || "Error creating label"); return; }
+
+      // option no select oculto
+      let opt = Array.from(hiddenSelect.options).find(o => o.value === String(data.id));
+      if (!opt){
+        opt = document.createElement('option');
+        opt.value = String(data.id);
+        opt.textContent = data.name;
+        hiddenSelect.appendChild(opt);
+      }
+      opt.selected = true;
+
+      // chip visual
+      let chip = chipsWrap.querySelector(`.label-chip[data-id="${data.id}"]`);
+      if(!chip){
+        chip = document.createElement('div');
+        chip.className = 'label-chip active';
+        chip.dataset.id = String(data.id);
+        chip.dataset.name = data.name;
+        chip.dataset.color = data.color || '#6b4ce6';
+        chip.innerHTML = `
+          <span class="dot" style="background:${data.color || '#6b4ce6'}"></span>
+          <span class="name"></span>
+        `;
+        chip.querySelector('.name').textContent = data.name;
+
+        // inserir depois do chipAdd, para ele continuar sendo o primeiro
+        chipAdd.insertAdjacentElement('afterend', chip);
+      }else{
+        chip.classList.add('active');
+      }
+
+      updateCount();
+      closeNewForm();
+    }catch(err){
+      console.error(err);
+      alert("Network error.");
+    }
+  });
+
+  updateCount();
+})();
+</script>

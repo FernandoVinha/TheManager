@@ -88,9 +88,18 @@
             <a class="nav-link {% if request.path|slice:':9' == '/projects' %}active{% endif %}" href="/projects/">
               <span class="icon">📁</span><span class="text">Projects</span>
             </a>
+
             <a class="nav-link {% if request.path == '/gitea/users/' %}active{% endif %}" href="/gitea/users/">
               <span class="icon">👥</span><span class="text">Gitea Users</span>
             </a>
+
+            {# ITEM: Support (app support, namespace 'suporte') #}
+            <a class="nav-link {% if request.path|slice:':9' == '/support/' %}active{% endif %}"
+               href="{''}">
+              <span class="icon">🛟</span><span class="text">Support</span>
+            </a>
+            {# /ITEM #}
+
             <!-- Add more items as needed -->
           {% else %}
             <a class="nav-link" href="{% url 'login' %}">
