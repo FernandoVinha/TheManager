@@ -13,8 +13,29 @@ from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = "django-insecure-CHANGE-ME-IN-PROD"
-DEBUG = True
+# ------------------------------------------------------
+# Carrega variáveis de ambiente o mais cedo possível
+# (para DB, Django, Gitea, etc.)
+# ------------------------------------------------------
+
+GETEA_ENV = BASE_DIR / "doker" / "getea" / ".env"
+ROOT_ENV = BASE_DIR / ".env"
+
+
+# Carrega primeiro getea/.env criado pelo instalador
+if GETEA_ENV.exists():
+    load_dotenv(GETEA_ENV, override=False)
+
+# Depois tenta carregar .env raiz (sem sobrescrever)
+if ROOT_ENV.exists():
+    load_dotenv(ROOT_ENV, override=False)
+
+# ======================================================
+# CONFIG BÁSICA
+# ======================================================
+
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-CHANGE-ME-IN-PROD")
+DEBUG = True  # Em prod, trocar para usar env, ex: os.environ.get("DJANGO_DEBUG") == "1"
 
 ALLOWED_HOSTS = ["*", "127.0.0.1", "localhost"]
 CSRF_TRUSTED_ORIGINS = [
@@ -37,7 +58,6 @@ INSTALLED_APPS = [
     "accounts",
     "projects",
     "tasck",
-
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -99,13 +119,27 @@ WSGI_APPLICATION = "core.wsgi.application"
 # ======================================================
 # DB
 # ======================================================
+# Se tiver variáveis de Postgres no ambiente (ex: via Docker),
+# usa Postgres. Caso contrário, cai para SQLite (dev local).
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+if os.environ.get("POSTGRES_DB") or os.environ.get("POSTGRES_HOST"):
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get("POSTGRES_DB", "themanager"),
+            "USER": os.environ.get("POSTGRES_USER", "themanager"),
+            "PASSWORD": os.environ.get("POSTGRES_PASSWORD", "themanager"),
+            "HOST": os.environ.get("POSTGRES_HOST", "db"),
+            "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 
 # ======================================================
@@ -125,7 +159,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # ======================================================
 
 LANGUAGE_CODE = "en-us"
-TIME_ZONE = "UTC"
+TIME_ZONE = "UTC"  # se quiser, pode trocar depois para "America/Sao_Paulo"
 USE_I18N = True
 USE_TZ = True
 
@@ -179,23 +213,12 @@ DEFAULT_FROM_EMAIL = "TheManager <no-reply@example.com>"
 # GITEA
 # ======================================================
 
-GETEA_ENV = BASE_DIR / "getea" / ".env"
-ROOT_ENV = BASE_DIR / ".env"
-
-# Carrega primeiro getea/.env criado pelo instalador
-if GETEA_ENV.exists():
-    load_dotenv(GETEA_ENV, override=False)
-
-# Depois tenta carregar .env raiz (sem sobrescrever)
-if ROOT_ENV.exists():
-    load_dotenv(ROOT_ENV, override=False)
-
-
 def _read_app_ini_root_url() -> str | None:
     """
     Lê ROOT_URL do getea/gitea/config/app.ini, caso exista.
     """
-    app_ini = BASE_DIR / "getea" / "gitea" / "config" / "app.ini"
+    app_ini = BASE_DIR / "doker" / "getea" / "gitea" / "config" / "app.ini"
+
     if not app_ini.exists():
         return None
 
@@ -227,7 +250,10 @@ if not _gitea_base:
 GITEA_BASE_URL = _gitea_base
 GITEA_ADMIN_TOKEN = _gitea_token or ""
 
-GITEA_APP_INI = str(BASE_DIR / "getea" / "gitea" / "config" / "app.ini")
+GITEA_APP_INI = str(
+    BASE_DIR / "doker" / "getea" / "gitea" / "config" / "app.ini"
+)
+
 
 # Loga aviso se DEBUG e token ausente
 if DEBUG and not GITEA_ADMIN_TOKEN:
@@ -260,6 +286,3 @@ LOGGING = {
 # ======================================================
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-
-ROOT_URLCONF = "core.urls"

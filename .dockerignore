@@ -1,0 +1,14 @@
+# Ignorar virtualenv e configs locais
+venv/
+.env
+.env.*
+*.pyc
+__pycache__/
+*.log
+
+# IMPORTANTE: ignorar tudo do Gitea
+doker/getea/gitea/
+doker/getea/gitea/**
+
+doker/getea/.env
+doker/getea/docker-compose.yml

@@ -9,7 +9,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 from django.conf import settings
 
@@ -70,8 +70,6 @@ def _http(
     with urllib.request.urlopen(req, data=data, timeout=timeout) as resp:
         raw = resp.read().decode("utf-8", errors="replace")
         return json.loads(raw) if raw else None
-
-
 
 
 def create_user(
@@ -187,7 +185,7 @@ def patch_user(
 
     updated = _http("PATCH", url, cfg.admin_token, payload)
 
-    # Algumas instalações retornam {} no PATCH; tente ler o público
+    # Algumas instalações retornam {} no PATCH; tente ler a representação pública
     if not updated or not isinstance(updated, dict):
         updated = _http("GET", f"{cfg.base_url}/api/v1/users/{urllib.parse.quote(username)}", cfg.admin_token)
         if not isinstance(updated, dict):
@@ -201,7 +199,6 @@ def delete_user(*, username: str, purge: bool = False) -> None:
     - purge=False (default) mantém histórico/commits (fica como 'Ghost')
     """
     cfg = GiteaConfig.from_settings()
-    # Em versões recentes, o 'purge' pode ser query param suportado:
     url = f"{cfg.base_url}/api/v1/admin/users/{urllib.parse.quote(username)}"
     if purge:
         url += "?purge=true"
@@ -229,7 +226,6 @@ def list_users(*, page: int = 1, limit: int = 50, query: Optional[str] = None) -
     results = []
     total = 0
 
-    # A API normalmente retorna lista; alguns forks retornam dict com data/total
     if isinstance(raw, list):
         results = raw
     elif isinstance(raw, dict):
@@ -261,22 +257,20 @@ def list_users(*, page: int = 1, limit: int = 50, query: Optional[str] = None) -
 
 def change_password(*, username: str, new_password: str) -> None:
     """
-    Troca a senha do usuário via CLI local (getea/gitea_user_cli.py),
-    executando com cwd= getea/ para que ele encontre o .env nesse diretório.
+    Troca a senha do usuário via CLI local (doker/getea/gitea_user_cli.py),
+    executando com cwd=doker/getea para que ele encontre o .env nesse diretório.
 
     Requer:
-      - TheManager/getea/gitea_user_cli.py   (presente)
-      - TheManager/getea/.env                 (com GITEA_BASE_URL/GITEA_ADMIN_TOKEN)
+      - TheManager/doker/getea/gitea_user_cli.py
+      - TheManager/doker/getea/.env (com GITEA_BASE_URL/GITEA_ADMIN_TOKEN)
     """
-    # BASE_DIR do Django
     base_dir = Path(getattr(settings, "BASE_DIR", Path(__file__).resolve().parents[3]))
-    getea_dir = base_dir / "getea"
+    getea_dir = base_dir / "doker" / "getea"
     cli = getea_dir / "gitea_user_cli.py"
 
     if not cli.exists():
         raise FileNotFoundError(f"CLI não encontrado: {cli}")
 
-    # Usa o mesmo Python em execução (evita PATH estranho)
     cmd = [
         sys.executable,
         str(cli),
