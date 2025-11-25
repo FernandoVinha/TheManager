@@ -1,17 +1,19 @@
-# accounts/models.py
 from __future__ import annotations
 
+from datetime import timedelta
+from typing import Optional
+
 from django.contrib.auth.models import AbstractUser
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from django.utils.crypto import get_random_string
-from datetime import timedelta
 
 
 class User(AbstractUser):
     """
     Custom user model com:
-    - Hierarquia de papeis (role)
+    - Hierarquia de papéis (role)
     - Campos de integração com Gitea (espelho de preferências/perfil)
     - Helpers de permissão que consideram 'role' e 'is_superuser'
     """
@@ -19,18 +21,18 @@ class User(AbstractUser):
     # =========================
     # Roles
     # =========================
-    ROLE_ADMIN   = "admin"
+    ROLE_ADMIN = "admin"
     ROLE_MANAGER = "manager"
-    ROLE_SENIOR  = "senior"
+    ROLE_SENIOR = "senior"
     ROLE_REGULAR = "regular"
-    ROLE_JUNIOR  = "junior"
+    ROLE_JUNIOR = "junior"
 
     ROLE_CHOICES = [
-        (ROLE_ADMIN,   "Admin"),
+        (ROLE_ADMIN, "Admin"),
         (ROLE_MANAGER, "Manager"),
-        (ROLE_SENIOR,  "Senior"),
+        (ROLE_SENIOR, "Senior"),
         (ROLE_REGULAR, "Regular"),
-        (ROLE_JUNIOR,  "Junior"),
+        (ROLE_JUNIOR, "Junior"),
     ]
 
     # e-mail único (substitui o email padrão do AbstractUser)
@@ -48,7 +50,9 @@ class User(AbstractUser):
     # Gitea integration (perfil e preferências)
     # =========================
     gitea_id = models.PositiveIntegerField(
-        null=True, blank=True,
+        null=True,
+        blank=True,
+        db_index=True,
         help_text="User ID in Gitea",
     )
     gitea_avatar_url = models.URLField(null=True, blank=True)
@@ -80,11 +84,12 @@ class User(AbstractUser):
     )
 
     # Flags de preferência/limitação no Gitea
-    gitea_allow_create_organization = models.BooleanField(null=True, blank=True, default=None)
-    gitea_allow_git_hook = models.BooleanField(null=True, blank=True, default=None)
-    gitea_allow_import_local = models.BooleanField(null=True, blank=True, default=None)
-    gitea_restricted = models.BooleanField(null=True, blank=True, default=None)
-    gitea_prohibit_login = models.BooleanField(null=True, blank=True, default=None)
+    # Evitamos tri-state (NULL) para BooleanFields; preferimos False como padrão.
+    gitea_allow_create_organization = models.BooleanField(default=False)
+    gitea_allow_git_hook = models.BooleanField(default=False)
+    gitea_allow_import_local = models.BooleanField(default=False)
+    gitea_restricted = models.BooleanField(default=False)
+    gitea_prohibit_login = models.BooleanField(default=False)
 
     # Campos de perfil do Gitea
     gitea_full_name = models.CharField(max_length=255, null=True, blank=True)
@@ -149,19 +154,41 @@ class User(AbstractUser):
     def can_edit_self(self) -> bool:
         return True
 
+    # Sobrescreve set_password para marcar flag efêmera usada pelos signals
+    def set_password(self, raw_password: str) -> None:
+        """
+        Marca flags efêmeras com a senha crua para permitir sincronia com Gitea
+        quando a opção GITEA_SYNC_PASSWORD estiver habilitada.
+        A senha crua NÃO é persistida no banco — apenas marcada em memória.
+        """
+        # marca sinalizador efêmero (não persistente)
+        self._raw_password_changed = True
+        self._raw_password_value = raw_password
+        # chama implementação base para gerar o hash
+        super().set_password(raw_password)
+
     # Normalização antes de salvar (e-mail sempre lower/strip)
     def save(self, *args, **kwargs):
         if self.email:
             self.email = self.email.strip().lower()
-        # Se desejar, descomente para forçar username minúsculo:
+        # se desejar normalizar username, descomente:
         # if self.username:
-        #     self.username = self.username.strip().lower()
+        #     self.username = self.username.strip()
         return super().save(*args, **kwargs)
+
+    def clean(self) -> None:
+        """Validações simples de modelo."""
+        if self.gitea_max_repo_creation is not None:
+            try:
+                if int(self.gitea_max_repo_creation) < 0:
+                    raise ValidationError({"gitea_max_repo_creation": "must be >= 0"})
+            except (TypeError, ValueError):
+                raise ValidationError({"gitea_max_repo_creation": "must be an integer or null"})
 
     class Meta:
         verbose_name = "User"
         verbose_name_plural = "Users"
-        ordering = ["date_joined"]
+        ordering = ["-date_joined"]  # mais novos primeiro
 
 
 # ======================================================
@@ -195,15 +222,16 @@ class UserInvite(models.Model):
         help_text="If defined, tokens beyond this point are invalid.",
     )
 
-    # status helpers
     def is_expired(self) -> bool:
         return bool(self.expires_at and timezone.now() >= self.expires_at)
 
     @staticmethod
-    def create_for_user(user: User, *, validity_days: int | None = 7) -> "UserInvite":
+    def create_for_user(user: User, *, validity_days: Optional[int] = 7) -> "UserInvite":
         """
         Cria (ou substitui) um token novo para o usuário informado.
+        Se já existir, substitui o token anterior.
         """
+        # remove token pré-existente (garante apenas um invite ativo por usuário)
         UserInvite.objects.filter(user=user).delete()
 
         token = get_random_string(56)
@@ -219,11 +247,7 @@ class UserInvite(models.Model):
             expires_at=expires,
         )
 
-        return UserInvite.objects.create(
-            user=user,
-            token=token,
-            expires_at=expires,
-        )
-
     def __str__(self) -> str:  # pragma: no cover
-        return f"Invite<{self.user_id}>"
+        # mostra token truncado para debugging sem expor o token completo
+        t = (self.token[:12] + "...") if self.token else "<no-token>"
+        return f"Invite<{self.user_id}:{t}>"

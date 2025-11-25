@@ -5,18 +5,22 @@
 
 {% block content %}
 <div class="mx-auto" style="max-width: 900px;">
-  <div class="og-card p-4">
+  <div class="og-card p-4" role="region" aria-labelledby="edit-user-title">
 
     <div class="d-flex align-items-center justify-content-between mb-3">
-      <h1 class="h5 m-0">Edit User</h1>
+      <h1 id="edit-user-title" class="h5 m-0">Edit User</h1>
       <a href="{% url 'gitea_users' %}" class="btn btn-outline-secondary btn-sm">Back to list</a>
     </div>
 
     {% if form.non_field_errors %}
-      <div class="alert alert-warning py-2 mb-3">{{ form.non_field_errors }}</div>
+      <div class="alert alert-warning py-2 mb-3" role="alert" aria-live="polite">
+        {% for err in form.non_field_errors %}
+          {{ err|escape }}{% if not forloop.last %}<br/>{% endif %}
+        {% endfor %}
+      </div>
     {% endif %}
 
-    <form method="post" novalidate>
+    <form method="post" novalidate autocomplete="off" aria-describedby="edit-user-help">
       {% csrf_token %}
 
       <div class="row g-3">
@@ -27,11 +31,14 @@
                    class="form-control{% if form.first_name.errors %} is-invalid{% endif %}"
                    id="{{ form.first_name.id_for_label }}"
                    name="{{ form.first_name.html_name }}"
-                   value="{{ form.first_name.value|default_if_none:'' }}"
-                   placeholder="First name">
+                   value="{{ form.first_name.value|default_if_none:''|escape }}"
+                   placeholder="First name"
+                   autocomplete="given-name">
             <label for="{{ form.first_name.id_for_label }}">First name</label>
             {% if form.first_name.errors %}
-              <div class="invalid-feedback d-block">{{ form.first_name.errors|striptags }}</div>
+              <div class="invalid-feedback d-block">
+                {% for e in form.first_name.errors %}{{ e|escape }}{% if not forloop.last %}<br/>{% endif %}{% endfor %}
+              </div>
             {% endif %}
           </div>
         </div>
@@ -43,11 +50,14 @@
                    class="form-control{% if form.last_name.errors %} is-invalid{% endif %}"
                    id="{{ form.last_name.id_for_label }}"
                    name="{{ form.last_name.html_name }}"
-                   value="{{ form.last_name.value|default_if_none:'' }}"
-                   placeholder="Last name">
+                   value="{{ form.last_name.value|default_if_none:''|escape }}"
+                   placeholder="Last name"
+                   autocomplete="family-name">
             <label for="{{ form.last_name.id_for_label }}">Last name</label>
             {% if form.last_name.errors %}
-              <div class="invalid-feedback d-block">{{ form.last_name.errors|striptags }}</div>
+              <div class="invalid-feedback d-block">
+                {% for e in form.last_name.errors %}{{ e|escape }}{% if not forloop.last %}<br/>{% endif %}{% endfor %}
+              </div>
             {% endif %}
           </div>
         </div>
@@ -59,11 +69,15 @@
                    class="form-control{% if form.email.errors %} is-invalid{% endif %}"
                    id="{{ form.email.id_for_label }}"
                    name="{{ form.email.html_name }}"
-                   value="{{ form.email.value|default_if_none:'' }}"
-                   placeholder="user@example.com">
+                   value="{{ form.email.value|default_if_none:''|escape }}"
+                   placeholder="user@example.com"
+                   autocomplete="email"
+                   inputmode="email">
             <label for="{{ form.email.id_for_label }}">Email</label>
             {% if form.email.errors %}
-              <div class="invalid-feedback d-block">{{ form.email.errors|striptags }}</div>
+              <div class="invalid-feedback d-block">
+                {% for e in form.email.errors %}{{ e|escape }}{% if not forloop.last %}<br/>{% endif %}{% endfor %}
+              </div>
             {% endif %}
           </div>
         </div>
@@ -74,7 +88,8 @@
             {% with current=form.is_active.value|stringformat:'s' %}
               <select class="form-select{% if form.is_active.errors %} is-invalid{% endif %}"
                       id="{{ form.is_active.id_for_label }}"
-                      name="{{ form.is_active.html_name }}">
+                      name="{{ form.is_active.html_name }}"
+                      aria-label="Active">
                 {% for val,label in form.is_active.field.choices %}
                   {% with v=val|stringformat:'s' %}
                     <option value="{{ val }}" {% if current == v %}selected{% endif %}>{{ label }}</option>
@@ -84,7 +99,9 @@
             {% endwith %}
             <label for="{{ form.is_active.id_for_label }}">Active</label>
             {% if form.is_active.errors %}
-              <div class="invalid-feedback d-block">{{ form.is_active.errors|striptags }}</div>
+              <div class="invalid-feedback d-block">
+                {% for e in form.is_active.errors %}{{ e|escape }}{% if not forloop.last %}<br/>{% endif %}{% endfor %}
+              </div>
             {% endif %}
           </div>
         </div>
@@ -95,20 +112,28 @@
             {% with current=form.role.value|stringformat:'s' %}
               <select class="form-select{% if form.role.errors %} is-invalid{% endif %}"
                       id="{{ form.role.id_for_label }}"
-                      name="{{ form.role.html_name }}">
+                      name="{{ form.role.html_name }}"
+                      aria-label="Role">
                 {% for val,label in form.role.field.choices %}
                   {% with v=val|stringformat:'s' %}
-                    <option value="{{ val }}" {% if current == v %}selected{% endif %}>{{ label }}</option>
+                    {# UX: managers cannot select admin (back-end must enforce) #}
+                    {% if val == 'admin' and request.user.is_manager %}
+                      <option value="{{ val }}" disabled>{{ label }} (not allowed)</option>
+                    {% else %}
+                      <option value="{{ val }}" {% if current == v %}selected{% endif %}>{{ label }}</option>
+                    {% endif %}
                   {% endwith %}
                 {% endfor %}
               </select>
             {% endwith %}
             <label for="{{ form.role.id_for_label }}">Role</label>
             {% if form.role.errors %}
-              <div class="invalid-feedback d-block">{{ form.role.errors|striptags }}</div>
+              <div class="invalid-feedback d-block">
+                {% for e in form.role.errors %}{{ e|escape }}{% if not forloop.last %}<br/>{% endif %}{% endfor %}
+              </div>
             {% endif %}
           </div>
-          <div class="form-text mt-1">Managers cannot assign Admin role.</div>
+          <div class="form-text mt-1">Managers cannot assign Admin role (server-side enforcement required).</div>
         </div>
 
         <!-- Gitea full name -->
@@ -118,11 +143,14 @@
                    class="form-control{% if form.gitea_full_name.errors %} is-invalid{% endif %}"
                    id="{{ form.gitea_full_name.id_for_label }}"
                    name="{{ form.gitea_full_name.html_name }}"
-                   value="{{ form.gitea_full_name.value|default_if_none:'' }}"
-                   placeholder="Full name (Gitea)">
+                   value="{{ form.gitea_full_name.value|default_if_none:''|escape }}"
+                   placeholder="Full name (Gitea)"
+                   autocomplete="name">
             <label for="{{ form.gitea_full_name.id_for_label }}">Full name (Gitea)</label>
             {% if form.gitea_full_name.errors %}
-              <div class="invalid-feedback d-block">{{ form.gitea_full_name.errors|striptags }}</div>
+              <div class="invalid-feedback d-block">
+                {% for e in form.gitea_full_name.errors %}{{ e|escape }}{% if not forloop.last %}<br/>{% endif %}{% endfor %}
+              </div>
             {% endif %}
           </div>
         </div>
@@ -134,11 +162,14 @@
                    class="form-control{% if form.gitea_website.errors %} is-invalid{% endif %}"
                    id="{{ form.gitea_website.id_for_label }}"
                    name="{{ form.gitea_website.html_name }}"
-                   value="{{ form.gitea_website.value|default_if_none:'' }}"
-                   placeholder="https://...">
+                   value="{{ form.gitea_website.value|default_if_none:''|escape }}"
+                   placeholder="https://..."
+                   autocomplete="url">
             <label for="{{ form.gitea_website.id_for_label }}">Website (Gitea)</label>
             {% if form.gitea_website.errors %}
-              <div class="invalid-feedback d-block">{{ form.gitea_website.errors|striptags }}</div>
+              <div class="invalid-feedback d-block">
+                {% for e in form.gitea_website.errors %}{{ e|escape }}{% if not forloop.last %}<br/>{% endif %}{% endfor %}
+              </div>
             {% endif %}
           </div>
         </div>
@@ -150,11 +181,14 @@
                    class="form-control{% if form.gitea_location.errors %} is-invalid{% endif %}"
                    id="{{ form.gitea_location.id_for_label }}"
                    name="{{ form.gitea_location.html_name }}"
-                   value="{{ form.gitea_location.value|default_if_none:'' }}"
-                   placeholder="City, Country">
+                   value="{{ form.gitea_location.value|default_if_none:''|escape }}"
+                   placeholder="City, Country"
+                   autocomplete="street-address">
             <label for="{{ form.gitea_location.id_for_label }}">Location (Gitea)</label>
             {% if form.gitea_location.errors %}
-              <div class="invalid-feedback d-block">{{ form.gitea_location.errors|striptags }}</div>
+              <div class="invalid-feedback d-block">
+                {% for e in form.gitea_location.errors %}{{ e|escape }}{% if not forloop.last %}<br/>{% endif %}{% endfor %}
+              </div>
             {% endif %}
           </div>
         </div>
@@ -168,10 +202,12 @@
               name="{{ form.gitea_description.html_name }}"
               placeholder="Bio/description"
               style="height: 120px"
-            >{{ form.gitea_description.value|default_if_none:'' }}</textarea>
+            >{{ form.gitea_description.value|default_if_none:''|escape }}</textarea>
             <label for="{{ form.gitea_description.id_for_label }}">Description (Gitea)</label>
             {% if form.gitea_description.errors %}
-              <div class="invalid-feedback d-block">{{ form.gitea_description.errors|striptags }}</div>
+              <div class="invalid-feedback d-block">
+                {% for e in form.gitea_description.errors %}{{ e|escape }}{% if not forloop.last %}<br/>{% endif %}{% endfor %}
+              </div>
             {% endif %}
           </div>
         </div>
@@ -184,6 +220,7 @@
                 class="form-select{% if form.gitea_visibility.errors %} is-invalid{% endif %}"
                 id="{{ form.gitea_visibility.id_for_label }}"
                 name="{{ form.gitea_visibility.html_name }}"
+                aria-label="Gitea visibility"
               >
                 <option value="" {% if not current %}selected{% endif %}></option>
                 {% for val,label in form.gitea_visibility.field.choices %}
@@ -195,14 +232,16 @@
             {% endwith %}
             <label for="{{ form.gitea_visibility.id_for_label }}">Gitea visibility</label>
             {% if form.gitea_visibility.errors %}
-              <div class="invalid-feedback d-block">{{ form.gitea_visibility.errors|striptags }}</div>
+              <div class="invalid-feedback d-block">
+                {% for e in form.gitea_visibility.errors %}{{ e|escape }}{% if not forloop.last %}<br/>{% endif %}{% endfor %}
+              </div>
             {% endif %}
           </div>
         </div>
 
         <!-- Gitea flags (checkboxes) -->
         <div class="col-md-6">
-          <div class="og-card p-3">
+          <div class="og-card p-3" role="group" aria-label="Gitea preferences">
             <div class="form-check mb-2">
               <input class="form-check-input" type="checkbox"
                      id="{{ form.gitea_allow_create_organization.id_for_label }}"
@@ -212,7 +251,7 @@
                 Allow create organization
               </label>
               {% if form.gitea_allow_create_organization.errors %}
-                <div class="text-danger small">{{ form.gitea_allow_create_organization.errors|striptags }}</div>
+                <div class="text-danger small">{{ form.gitea_allow_create_organization.errors|escape }}</div>
               {% endif %}
             </div>
 
@@ -225,7 +264,7 @@
                 Allow git hook
               </label>
               {% if form.gitea_allow_git_hook.errors %}
-                <div class="text-danger small">{{ form.gitea_allow_git_hook.errors|striptags }}</div>
+                <div class="text-danger small">{{ form.gitea_allow_git_hook.errors|escape }}</div>
               {% endif %}
             </div>
 
@@ -238,7 +277,7 @@
                 Allow import local
               </label>
               {% if form.gitea_allow_import_local.errors %}
-                <div class="text-danger small">{{ form.gitea_allow_import_local.errors|striptags }}</div>
+                <div class="text-danger small">{{ form.gitea_allow_import_local.errors|escape }}</div>
               {% endif %}
             </div>
 
@@ -251,7 +290,7 @@
                 Restricted
               </label>
               {% if form.gitea_restricted.errors %}
-                <div class="text-danger small">{{ form.gitea_restricted.errors|striptags }}</div>
+                <div class="text-danger small">{{ form.gitea_restricted.errors|escape }}</div>
               {% endif %}
             </div>
 
@@ -264,7 +303,7 @@
                 Prohibit login
               </label>
               {% if form.gitea_prohibit_login.errors %}
-                <div class="text-danger small">{{ form.gitea_prohibit_login.errors|striptags }}</div>
+                <div class="text-danger small">{{ form.gitea_prohibit_login.errors|escape }}</div>
               {% endif %}
             </div>
           </div>
@@ -277,11 +316,13 @@
                    class="form-control{% if form.gitea_max_repo_creation.errors %} is-invalid{% endif %}"
                    id="{{ form.gitea_max_repo_creation.id_for_label }}"
                    name="{{ form.gitea_max_repo_creation.html_name }}"
-                   value="{{ form.gitea_max_repo_creation.value|default_if_none:'' }}"
+                   value="{{ form.gitea_max_repo_creation.value|default_if_none:''|escape }}"
                    placeholder="Max repos">
             <label for="{{ form.gitea_max_repo_creation.id_for_label }}">Max repo creation</label>
             {% if form.gitea_max_repo_creation.errors %}
-              <div class="invalid-feedback d-block">{{ form.gitea_max_repo_creation.errors|striptags }}</div>
+              <div class="invalid-feedback d-block">
+                {% for e in form.gitea_max_repo_creation.errors %}{{ e|escape }}{% if not forloop.last %}<br/>{% endif %}{% endfor %}
+              </div>
             {% endif %}
           </div>
         </div>
@@ -296,4 +337,17 @@
 
   </div>
 </div>
+
+{% block extra_js %}
+<script>
+  // Normaliza email para lowercase no blur
+  (function(){
+    const emailInput = document.getElementById("{{ form.email.id_for_label }}");
+    if (!emailInput) return;
+    emailInput.addEventListener('blur', function () {
+      try { this.value = this.value.trim().toLowerCase(); } catch(e) { /* noop */ }
+    });
+  })();
+</script>
+{% endblock %}
 {% endblock %}

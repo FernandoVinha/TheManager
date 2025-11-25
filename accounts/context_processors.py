@@ -1,16 +1,26 @@
-# accounts/context_processors.py
+"""
+Context processor que expõe atalho `U` nos templates para o usuário atual.
+"""
 
-def user_role_context(request):
+from typing import Any, Dict, Optional
+
+from django.http import HttpRequest
+
+
+def user_role_context(request: HttpRequest) -> Dict[str, Optional[Dict[str, Any]]]:
     """
-    Makes user profile + permissions available to every template as `U`.
-    If user is not authenticated, U = None.
+    Torna o perfil do usuário + permissões disponíveis para todos os templates
+    como `U`. Se o usuário não estiver autenticado, `U` será None.
+
+    Exemplo de uso no template:
+      {% if U and U.can_manage_users %} ... {% endif %}
     """
     user = getattr(request, "user", None)
 
     if not user or not user.is_authenticated:
         return {"U": None}
 
-    U = {
+    U: Dict[str, Any] = {
         # Basic identity
         "id": user.id,
         "username": user.username,
@@ -18,9 +28,6 @@ def user_role_context(request):
         "first_name": user.first_name,
         "last_name": user.last_name,
         "full_name": user.get_full_name() or user.username,
-
-        # Django avatar (if you add later)
-        "local_avatar": getattr(user, "avatar", None),
 
         # Gitea info
         "gitea_id": user.gitea_id,

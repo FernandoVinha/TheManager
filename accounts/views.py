@@ -1,6 +1,7 @@
 # accounts/views.py
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 from django.conf import settings
@@ -9,6 +10,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth import login, logout
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView
+from django.core.cache import cache
 from django.http import (
     HttpRequest,
     HttpResponse,
@@ -30,6 +32,14 @@ from .models import User, UserInvite
 from .services import gitea as gitea_api
 from .utils import send_reset_link_or_return
 
+log = logging.getLogger(__name__)
+UserModel = get_user_model()
+
+# --- Rate limiting config (simples, baseada em cache) ---
+# max requests per window per email/ip
+PW_RESET_MAX = int(getattr(settings, "PW_RESET_MAX", 5))
+PW_RESET_WINDOW = int(getattr(settings, "PW_RESET_WINDOW_SECONDS", 60 * 60))  # default 1 hora
+
 
 # =========================================================
 # Helpers
@@ -45,6 +55,62 @@ def _safe_redirect(request: HttpRequest, default_name: str) -> HttpResponse:
 
 def _forbidden() -> HttpResponse:
     return HttpResponseForbidden("Forbidden")
+
+
+def _throttle_key_for_email(email: str) -> str:
+    return f"pw_reset_email:{email}"
+
+
+def _throttle_key_for_ip(ip: str) -> str:
+    return f"pw_reset_ip:{ip}"
+
+
+def _increment_counter(key: str, window: int) -> int:
+    """
+    Incrementa contador no cache e retorna novo valor.
+    Usa set + incr para compatibilidade com locmem (caso não suporte incr).
+    """
+    try:
+        # tenta incr (mais eficiente em caches distribuídos)
+        val = cache.incr(key)
+        return int(val)
+    except Exception:
+        # fallback: pega valor atual e seta+incr
+        val = cache.get(key)
+        if val is None:
+            cache.set(key, 1, timeout=window)
+            return 1
+        else:
+            try:
+                new = int(val) + 1
+            except Exception:
+                new = 1
+            cache.set(key, new, timeout=window)
+            return new
+
+
+def _check_and_increment_throttle(email: str, ip: str) -> tuple[bool, Optional[str]]:
+    """
+    Retorna (allowed, reason). Se allowed == False -> operação deve ser bloqueada
+    por excesso de requisições.
+    """
+    email_key = _throttle_key_for_email(email)
+    ip_key = _throttle_key_for_ip(ip)
+
+    email_count = cache.get(email_key) or 0
+    ip_count = cache.get(ip_key) or 0
+
+    if int(email_count) >= PW_RESET_MAX:
+        return False, "Too many reset requests for this email. Try later."
+    if int(ip_count) >= (PW_RESET_MAX * 4):  # limite mais alto por IP
+        return False, "Too many requests from your IP. Try later."
+
+    # increment counters
+    new_email_count = _increment_counter(email_key, PW_RESET_WINDOW)
+    new_ip_count = _increment_counter(ip_key, PW_RESET_WINDOW)
+
+    log.debug("pw reset counters: email=%s ip=%s -> %s/%s", email, ip, new_email_count, new_ip_count)
+    return True, None
 
 
 # =========================================================
@@ -143,9 +209,9 @@ class GiteaUserListView(LoginRequiredMixin, View):
             users = []
             total = 0
             error = str(e)
+            log.exception("Falha ao listar usuários no Gitea: %s", e)
 
-        # ===== NOVO: enriquecer com local_pk (id do User no Django), para ações CRUD locais =====
-        # Faz match por username (login) e, se não houver, por email.
+        # ===== Enriquecer com local_pk (id do User no Django), para ações CRUD locais =====
         for u in users:
             login_name = (u.get("login") or "").strip()
             email = (u.get("email") or "").strip().lower()
@@ -157,7 +223,7 @@ class GiteaUserListView(LoginRequiredMixin, View):
                 local = User.objects.filter(email__iexact=email).only("id").first()
 
             u["local_pk"] = local.id if local else None
-        # ===== FIM DO BLOCO NOVO =====
+        # ===== FIM DO BLOCO =====
 
         has_prev = page > 1
         has_next = (page * limit) < total if total else len(users) == limit
@@ -206,41 +272,61 @@ class UserCreateView(LoginRequiredMixin, View):
         # Cria usuário inativo com senha inutilizável
         user: User = form.save(commit=False)
         user.is_active = False
-        # base de username a partir do email (garante unicidade)
-        base_username = (user.username or (user.email.split("@")[0]))
-        candidate = base_username
+
+        # Garante username base a partir do email se não fornecido
+        base = (user.username or (user.email.split("@")[0])).strip()
+        base = "".join(ch for ch in base if ch.isalnum() or ch in ("_", "-")).lower() or "user"
+        candidate = base
         i = 1
         while User.objects.filter(username=candidate).exists():
             i += 1
-            candidate = f"{base_username}{i}"
+            candidate = f"{base}{i}"
         user.username = candidate
+
+        # marca senha inutilizável localmente - a ativação será via invite link
         user.set_unusable_password()
         user.save()
 
-        # Token one-time
+        # Cria invite
         invite = UserInvite.create_for_user(user)
 
-        # Envia e-mail ou retorna link para copiar
-        link = send_reset_link_or_return(user, invite.token, request)
+        # Envia o e-mail (ou retorna link copiável se SMTP não disponivel)
+        try:
+            link = send_reset_link_or_return(user, invite.token, request)
+        except Exception as e:
+            # Se o envio falhar de forma inesperada, log e disponibiliza link ao admin
+            log.exception("Erro ao enviar e-mail de ativação para user=%s: %s", user.pk, e)
+            link = None
+
         if link:
+            # caso sem SMTP: mostramos página de sucesso com o link copiável
+            messages.warning(request, "Email não está configurado — copie o link abaixo e envie manualmente.")
             return render(
                 request,
                 self.template_success_fallback,
                 {"user_created": user, "reset_link": link},
             )
 
-        messages.success(request, "User created and reset link sent by email.")
+        # Se o backend SMTP enviou, informamos o admin e redirecionamos
+        messages.success(request, "User created and an email to set password was sent.")
         return _safe_redirect(request, default_name="gitea_users")
 
 
 # =========================================================
-# Forgot Password (público) — anti-enumeração
+# Forgot Password (público) — anti-enumeração + rate limiting
 # =========================================================
 
 class ForgotPasswordView(View):
     template_name = "accounts/forgot_password.html"
     template_done_copy = "accounts/forgot_password_done.html"
     template_done_sent = "accounts/forgot_password_sent.html"
+
+    def get_client_ip(self, request: HttpRequest) -> str:
+        # Método simples para obter IP (X-Forwarded-For se presente)
+        xff = request.META.get("HTTP_X_FORWARDED_FOR")
+        if xff:
+            return xff.split(",")[0].strip()
+        return request.META.get("REMOTE_ADDR", "unknown")
 
     def get(self, request: HttpRequest) -> HttpResponse:
         return render(request, self.template_name)
@@ -250,19 +336,33 @@ class ForgotPasswordView(View):
         if not email:
             return render(request, self.template_name, {"error": "Email is required."})
 
+        # Throttle básico para evitar abuso
+        client_ip = self.get_client_ip(request)
+        allowed, reason = _check_and_increment_throttle(email=email, ip=client_ip)
+        if not allowed:
+            log.warning("Throttle PW reset blocked: email=%s ip=%s reason=%s", email, client_ip, reason)
+            # Mostramos mensagem genérica para evitar enumeração de razão
+            messages.error(request, "Too many requests. Try again later.")
+            return render(request, self.template_done_sent)
+
         user = User.objects.filter(email=email).first()
         if user:
-            invite = getattr(user, "invite", None)
-            if invite:
-                invite.delete()
-            invite = UserInvite.create_for_user(user)
+            try:
+                # Remove invite anterior e cria novo
+                existing_invite = getattr(user, "invite", None)
+                if existing_invite:
+                    existing_invite.delete()
+                invite = UserInvite.create_for_user(user)
 
-            link = send_reset_link_or_return(user, invite.token, request)
-            if link:
-                # sem e-mail configurado → mostra link copiável
-                return render(request, self.template_done_copy, {"reset_link": link})
+                link = send_reset_link_or_return(user, invite.token, request)
+                if link:
+                    # Sem SMTP => mostra link copiável (e não informa se user existe ou não)
+                    return render(request, self.template_done_copy, {"reset_link": link})
+            except Exception as e:
+                log.exception("Erro ao processar forgot_password para email=%s: %s", email, e)
+                # mesmo em erro interno, não retornamos informação sobre existência do usuário
 
-        # sempre mostra "sent" para evitar enumeração
+        # Sempre retornar "sent" para evitar enumeração — comportamento esperado
         return render(request, self.template_done_sent)
 
 
@@ -293,12 +393,18 @@ class PasswordResetConfirmView(View):
             return render(request, self.template_name, {"form": form})
 
         user = invite.user
+        # Atribui a senha e ativa a conta
         user.set_password(form.cleaned_data["password1"])
-        user.is_active = True  # cobre o caso de ativação
+        user.is_active = True
         user.save()
 
-        invite.delete()  # consome token
+        # Consome token
+        try:
+            invite.delete()
+        except Exception:
+            log.exception("Erro ao deletar invite após reset (user=%s)", user.pk)
 
+        # Login automático
         login(request, user)
         messages.success(request, "Password updated. Welcome!")
         return _safe_redirect(request, default_name="users")
@@ -327,7 +433,12 @@ class ResendInviteView(LoginRequiredMixin, View):
             existing.delete()
         invite = UserInvite.create_for_user(target)
 
-        link = send_reset_link_or_return(target, invite.token, request)
+        try:
+            link = send_reset_link_or_return(target, invite.token, request)
+        except Exception as e:
+            log.exception("Erro ao reenviar invite (user=%s): %s", target.pk, e)
+            link = None
+
         if link:
             messages.info(request, "Email is not configured. Copy this link and send it manually.")
             return render(

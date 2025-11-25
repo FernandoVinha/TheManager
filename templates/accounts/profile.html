@@ -1,17 +1,122 @@
-{% extends "base_sidebar.html" %}
-{% block title %}Edit User — {{ target.username }}{% endblock %}
+{% extends "base.html" %}
+{% block title %}Set Password{% endblock %}
+
 {% block content %}
-<div class="og-card p-4">
-  <h1 class="h5 mb-3">Edit User</h1>
-  <form method="post">
-    {% csrf_token %}
-    <div class="row g-3">
-      {{ form.as_p }}
-    </div>
-    <div class="mt-3 d-flex gap-2">
-      <button class="btn btn-primary">Save</button>
-      <a href="{% url 'gitea_users' %}" class="btn btn-outline-secondary">Back</a>
-    </div>
-  </form>
+<div class="mx-auto" style="max-width:480px;">
+  <div class="og-card p-4">
+    <h1 class="h5 mb-3">Set your password</h1>
+
+    {% if form.non_field_errors %}
+      <div class="alert alert-warning py-2" role="alert" aria-live="polite">
+        {% for err in form.non_field_errors %}
+          {{ err }}
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <form method="post" novalidate id="resetForm" autocomplete="off">
+      {% csrf_token %}
+
+      <div class="form-floating mb-3">
+        {# password1 field #}
+        <input
+          type="password"
+          class="form-control {% if form.password1.errors %}is-invalid{% endif %}"
+          id="pwd1"
+          name="{{ form.password1.html_name|default:'password1' }}"
+          placeholder="New password"
+          autocomplete="new-password"
+          required
+          aria-describedby="pwd1Help"
+          aria-invalid="{% if form.password1.errors %}true{% else %}false{% endif %}"
+        >
+        <label for="pwd1">New password</label>
+
+        {% if form.password1.help_text %}
+          <div id="pwd1Help" class="form-text small text-muted">{{ form.password1.help_text }}</div>
+        {% endif %}
+
+        {% if form.password1.errors %}
+          <div class="invalid-feedback">
+            {% for e in form.password1.errors %}{{ e }}{% endfor %}
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="form-floating mb-3 position-relative">
+        {# password2 field #}
+        <input
+          type="password"
+          class="form-control {% if form.password2.errors %}is-invalid{% endif %}"
+          id="pwd2"
+          name="{{ form.password2.html_name|default:'password2' }}"
+          placeholder="Confirm password"
+          autocomplete="new-password"
+          required
+          aria-invalid="{% if form.password2.errors %}true{% else %}false{% endif %}"
+        >
+        <label for="pwd2">Confirm password</label>
+
+        {% if form.password2.errors %}
+          <div class="invalid-feedback">
+            {% for e in form.password2.errors %}{{ e }}{% endfor %}
+          </div>
+        {% endif %}
+
+        {# toggle button in input area #}
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-secondary position-absolute"
+          style="top:0.6rem; right:0.6rem; z-index:2"
+          id="togglePwd"
+          aria-label="Show or hide password"
+          title="Show/Hide password"
+        >Show</button>
+      </div>
+
+      <button class="btn btn-primary w-100" type="submit" id="submitBtn">Save password</button>
+    </form>
+  </div>
 </div>
+
+{% block extra_js %}
+<script>
+  // Evita duplo submit (que pode gerar um segundo POST)
+  (function(){
+    const form = document.getElementById('resetForm');
+    const btn  = document.getElementById('submitBtn');
+    const toggle = document.getElementById('togglePwd');
+
+    if (form && btn) {
+      form.addEventListener('submit', function(){
+        btn.disabled = true;
+        btn.innerText = 'Saving...';
+      });
+    }
+
+    // Toggle de mostrar/esconder senha
+    if (toggle) {
+      toggle.addEventListener('click', function () {
+        const a = document.getElementById('pwd1');
+        const b = document.getElementById('pwd2');
+        if (!a || !b) return;
+        const isShown = a.type === 'text';
+        a.type = b.type = isShown ? 'password' : 'text';
+        toggle.innerText = isShown ? 'Show' : 'Hide';
+      });
+    }
+
+    // Focar no primeiro campo com erro, se houver
+    document.addEventListener('DOMContentLoaded', function () {
+      const invalid = document.querySelector('.is-invalid');
+      if (invalid) {
+        invalid.focus();
+      } else {
+        const first = document.getElementById('pwd1');
+        if (first) first.focus();
+      }
+    });
+  })();
+</script>
+{% endblock %}
 {% endblock %}
