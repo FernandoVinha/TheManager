@@ -2,114 +2,97 @@
 set -Eeuo pipefail
 export LC_ALL=C
 
-# =====================================
-#  TheManager - Uninstaller (parcial)
-# =====================================
-# Remove apenas:
-#  - containers / network / volumes do TheManager
-#  - containers / data do Gitea deste projeto
-# NÃO roda nenhum "docker system prune" nem mexe em
-# outros projetos Docker do servidor.
+echo "========================================="
+echo "     DEEP UNINSTALL - SAFE PROJECT CLEAN"
+echo "========================================="
 
 need() {
   command -v "$1" >/dev/null 2>&1 || { echo "Falta: $1"; exit 1; }
 }
 
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-echo "=============================="
-echo "   TheManager - Uninstaller"
-echo "=============================="
-echo "Projeto em: ${PROJECT_DIR}"
-echo
-
 need docker
 
-# ------------------------------------------------
-# 1) Derrubar Django + Postgres (raiz do projeto)
-# ------------------------------------------------
-echo "-> Derrubando stack Django + Postgres (docker compose down -v) ..."
-cd "$PROJECT_DIR"
+echo
+echo "Digite o NOME DO PROJETO a ser removido:"
+echo "(ex: TheManager, getea, omniguardian, flybiohub)"
+read -r PROJECT_NAME
 
-if [ -f docker-compose.yml ]; then
-  docker compose down -v || echo "  (aviso) Falha ao derrubar stack Django, talvez já esteja parado."
-else
-  echo "  (aviso) docker-compose.yml não encontrado na raiz, pulando Django."
+if [ -z "$PROJECT_NAME" ]; then
+  echo "ERRO: nome inválido."
+  exit 1
 fi
-
-# ------------------------------------------------
-# 2) Derrubar Gitea deste projeto
-# ------------------------------------------------
-GITEA_DIR="${PROJECT_DIR}/doker/getea"
 
 echo
-echo "-> Derrubando stack Gitea deste projeto ..."
-if [ -d "$GITEA_DIR" ] && [ -f "${GITEA_DIR}/docker-compose.yml" ]; then
-  cd "$GITEA_DIR"
-  docker compose down || echo "  (aviso) Falha ao derrubar stack Gitea, talvez já esteja parado."
-else
-  echo "  (aviso) Pasta doker/getea ou docker-compose.yml não encontrados, pulando Gitea."
-fi
-
-# ------------------------------------------------
-# 3) Remover dados locais do Gitea deste projeto
-# ------------------------------------------------
+echo "=== PROCURANDO QUALQUER STACK DOCKER RELACIONADA A: $PROJECT_NAME ==="
 echo
-echo "-> Removendo dados locais do Gitea (somente deste projeto) ..."
 
-GITEA_DB_DIR="${GITEA_DIR}/gitea/db"
-GITEA_DATA_DIR="${GITEA_DIR}/gitea/data"
+# --------------------------------------------
+# 1. Remover containers relacionados
+# --------------------------------------------
+echo "-> Derrubando containers relacionados ao projeto..."
+docker ps -a --format "{{.ID}} {{.Names}}" | grep -i "$PROJECT_NAME" | while read -r ID NAME; do
+  echo "   - Removendo container: $NAME"
+  docker rm -f "$ID" >/dev/null 2>&1 || true
+done
 
-if [ -d "$GITEA_DB_DIR" ]; then
-  echo "   rm -rf ${GITEA_DB_DIR}"
-  rm -rf "$GITEA_DB_DIR" || echo "   (aviso) Não foi possível apagar ${GITEA_DB_DIR} (permissão?)."
-else
-  echo "   (info) ${GITEA_DB_DIR} não existe, nada a remover."
-fi
+# --------------------------------------------
+# 2. Remover imagens relacionadas
+# --------------------------------------------
+echo "-> Removendo imagens relacionadas..."
+docker images --format "{{.ID}} {{.Repository}}" | grep -i "$PROJECT_NAME" | while read -r ID REPO; do
+  echo "   - Removendo imagem: $REPO"
+  docker rmi -f "$ID" >/dev/null 2>&1 || true
+done
 
-if [ -d "$GITEA_DATA_DIR" ]; then
-  echo "   rm -rf ${GITEA_DATA_DIR}"
-  rm -rf "$GITEA_DATA_DIR" || echo "   (aviso) Não foi possível apagar ${GITEA_DATA_DIR} (permissão?)."
-else
-  echo "   (info) ${GITEA_DATA_DIR} não existe, nada a remover."
-fi
+# --------------------------------------------
+# 3. Remover volumes relacionados
+# --------------------------------------------
+echo "-> Removendo volumes relacionados..."
+docker volume ls --format "{{.Name}}" | grep -i "$PROJECT_NAME" | while read -r VOL; do
+  echo "   - Removendo volume: $VOL"
+  docker volume rm -f "$VOL" >/dev/null 2>&1 || true
+done
 
-# ------------------------------------------------
-# 4) Remover volume do Postgres do TheManager
-# ------------------------------------------------
-echo
-echo "-> Removendo volume Docker do Postgres do TheManager (se existir) ..."
-cd "$PROJECT_DIR"
+# --------------------------------------------
+# 4. Remover redes relacionadas
+# --------------------------------------------
+echo "-> Removendo redes relacionadas..."
+docker network ls --format "{{.Name}}" | grep -i "$PROJECT_NAME" | while read -r NET; do
+  echo "   - Removendo rede: $NET"
+  docker network rm "$NET" >/dev/null 2>&1 || true
+done
 
-# Nome padrão do volume conforme docker-compose: themanager_postgres_data
-if docker volume inspect themanager_postgres_data >/dev/null 2>&1; then
-  docker volume rm themanager_postgres_data || echo "  (aviso) Não foi possível remover volume themanager_postgres_data."
-else
-  echo "  (info) Volume themanager_postgres_data não existe, nada a remover."
-fi
+# --------------------------------------------
+# 5. Remover pastas e arquivos da instalação antiga
+# --------------------------------------------
+SEARCH_DIRS=(
+  "$PROJECT_NAME"
+  "doker/$PROJECT_NAME"
+  "docker/$PROJECT_NAME"
+  "docker-compose-$PROJECT_NAME"
+)
 
-# ------------------------------------------------
-# 5) Remover imagem themanager-web (opcional)
-# ------------------------------------------------
-echo
-echo "-> Removendo imagem Docker themanager-web (se existir) ..."
-if docker image inspect themanager-web >/dev/null 2>&1; then
-  docker rmi themanager-web || echo "  (aviso) Não foi possível remover imagem themanager-web (talvez em uso)."
-else
-  echo "  (info) Imagem themanager-web não encontrada, nada a remover."
-fi
+echo "-> Apagando pastas relacionadas..."
+for DIR in "${SEARCH_DIRS[@]}"; do
+  if [ -d "$DIR" ]; then
+    echo "   - Removendo pasta: $DIR"
+    rm -rf "$DIR"
+  fi
+done
 
-# ------------------------------------------------
-# 6) Resumo
-# ------------------------------------------------
+echo "-> Apagando arquivos .env relacionados..."
+find . -maxdepth 3 -type f -iname "*${PROJECT_NAME}*.env*" -print -delete 2>/dev/null || true
+
+echo "-> Removendo caches, venvs e build lixos..."
+find . -type d -iname "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+find . -type d -iname "venv" -exec rm -rf {} + 2>/dev/null || true
+find . -type d -iname "env" -exec rm -rf {} + 2>/dev/null || true
+find . -type d -iname "build" -exec rm -rf {} + 2>/dev/null || true
+find . -type d -iname "dist" -exec rm -rf {} + 2>/dev/null || true
+
 echo
 echo "========================================="
-echo " Uninstall parcial concluído."
-echo " - Stack Django + Postgres parado e removido"
-echo " - Stack Gitea deste projeto parado e removido"
-echo " - Volume themanager_postgres_data removido (se existia)"
-echo " - Pastas doker/getea/gitea/db e gitea/data limpas (se existiam)"
-echo " - Imagem themanager-web removida (se existia)"
-echo
-echo "Nenhum outro container/volume/docker global foi alterado."
+echo "    REMOÇÃO COMPLETA FINALIZADA!"
+echo "    Projeto limpo: $PROJECT_NAME"
 echo "========================================="
+echo

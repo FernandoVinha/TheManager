@@ -1,0 +1,182 @@
+{% extends "base_sidebar.html" %}
+{% load static %}
+
+{% block title %}Email Settings{% endblock %}
+
+{% block content %}
+<div class="mx-auto" style="max-width: 980px;">
+  <div class="og-card p-4">
+
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h1 class="h5 m-0">Email Settings</h1>
+      <a href="{% url 'system_settings:home' %}" class="btn btn-outline-secondary btn-sm">Back to settings</a>
+    </div>
+
+    {% if form.non_field_errors %}
+      <div class="alert alert-warning py-2 mb-3">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} py-2 mb-2">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      <div class="row g-3">
+        <!-- EMAIL_BACKEND -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="text"
+                   class="form-control{% if form.email_backend.errors %} is-invalid{% endif %}"
+                   id="{{ form.email_backend.id_for_label }}"
+                   name="{{ form.email_backend.html_name }}"
+                   value="{{ form.email_backend.value|default_if_none:'' }}"
+                   placeholder="Email backend" required>
+            <label for="{{ form.email_backend.id_for_label }}">Email backend</label>
+            {% if form.email_backend.errors %}
+              <div class="invalid-feedback d-block">{{ form.email_backend.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- EMAIL_HOST -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="text"
+                   class="form-control{% if form.email_host.errors %} is-invalid{% endif %}"
+                   id="{{ form.email_host.id_for_label }}"
+                   name="{{ form.email_host.html_name }}"
+                   value="{{ form.email_host.value|default_if_none:'' }}"
+                   placeholder="SMTP host" required>
+            <label for="{{ form.email_host.id_for_label }}">SMTP host (EMAIL_HOST)</label>
+            {% if form.email_host.errors %}
+              <div class="invalid-feedback d-block">{{ form.email_host.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- EMAIL_PORT -->
+        <div class="col-md-4">
+          <div class="form-floating">
+            <input type="number"
+                   class="form-control{% if form.email_port.errors %} is-invalid{% endif %}"
+                   id="{{ form.email_port.id_for_label }}"
+                   name="{{ form.email_port.html_name }}"
+                   value="{{ form.email_port.value|default_if_none:587 }}"
+                   placeholder="Port" required>
+            <label for="{{ form.email_port.id_for_label }}">Port (EMAIL_PORT)</label>
+            {% if form.email_port.errors %}
+              <div class="invalid-feedback d-block">{{ form.email_port.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- TLS / SSL -->
+        <div class="col-md-4 d-flex align-items-center">
+          <div class="form-check mt-3">
+            {{ form.email_use_tls }}
+            <label class="form-check-label" for="{{ form.email_use_tls.id_for_label }}">
+              {{ form.email_use_tls.label }}
+            </label>
+            {% if form.email_use_tls.errors %}
+              <div class="text-danger small d-block">{{ form.email_use_tls.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="col-md-4 d-flex align-items-center">
+          <div class="form-check mt-3">
+            {{ form.email_use_ssl }}
+            <label class="form-check-label" for="{{ form.email_use_ssl.id_for_label }}">
+              {{ form.email_use_ssl.label }}
+            </label>
+            {% if form.email_use_ssl.errors %}
+              <div class="text-danger small d-block">{{ form.email_use_ssl.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- EMAIL_HOST_USER -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="text"
+                   class="form-control{% if form.email_host_user.errors %} is-invalid{% endif %}"
+                   id="{{ form.email_host_user.id_for_label }}"
+                   name="{{ form.email_host_user.html_name }}"
+                   value="{{ form.email_host_user.value|default_if_none:'' }}"
+                   placeholder="SMTP user">
+            <label for="{{ form.email_host_user.id_for_label }}">SMTP user (EMAIL_HOST_USER)</label>
+            {% if form.email_host_user.errors %}
+              <div class="invalid-feedback d-block">{{ form.email_host_user.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- EMAIL_HOST_PASSWORD -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="password"
+                   class="form-control{% if form.email_host_password.errors %} is-invalid{% endif %}"
+                   id="{{ form.email_host_password.id_for_label }}"
+                   name="{{ form.email_host_password.html_name }}"
+                   value="{{ form.email_host_password.value|default_if_none:'' }}"
+                   placeholder="SMTP password">
+            <label for="{{ form.email_host_password.id_for_label }}">SMTP password (EMAIL_HOST_PASSWORD)</label>
+            {% if form.email_host_password.errors %}
+              <div class="invalid-feedback d-block">{{ form.email_host_password.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- DEFAULT_FROM_EMAIL -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="text"
+                   class="form-control{% if form.default_from_email.errors %} is-invalid{% endif %}"
+                   id="{{ form.default_from_email.id_for_label }}"
+                   name="{{ form.default_from_email.html_name }}"
+                   value="{{ form.default_from_email.value|default_if_none:'TheManager <no-reply@example.com>' }}"
+                   placeholder="Default from email" required>
+            <label for="{{ form.default_from_email.id_for_label }}">DEFAULT_FROM_EMAIL</label>
+            {% if form.default_from_email.errors %}
+              <div class="invalid-feedback d-block">{{ form.default_from_email.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- SERVER_EMAIL -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="text"
+                   class="form-control{% if form.server_email.errors %} is-invalid{% endif %}"
+                   id="{{ form.server_email.id_for_label }}"
+                   name="{{ form.server_email.html_name }}"
+                   value="{{ form.server_email.value|default_if_none:'' }}"
+                   placeholder="Server email">
+            <label for="{{ form.server_email.id_for_label }}">SERVER_EMAIL</label>
+            {% if form.server_email.errors %}
+              <div class="invalid-feedback d-block">{{ form.server_email.errors|striptags }}</div>
+            {% endif %}
+          </div>
+          <div class="form-text">
+            If empty, it will default to DEFAULT_FROM_EMAIL.
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-end mt-4 gap-2">
+        <a href="{% url 'system_settings:home' %}" class="btn btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+
+  </div>
+</div>
+{% endblock %}

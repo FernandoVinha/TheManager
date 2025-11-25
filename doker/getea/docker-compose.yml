@@ -14,7 +14,6 @@ services:
       - "--character-set-server=utf8mb4"
       - "--collation-server=utf8mb4_unicode_ci"
     volumes:
-      # Banco de dados fica dentro da pasta local gitea/db
       - ./gitea/db:/var/lib/mysql
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"${MYSQL_ROOT_PASSWORD}\" || exit 1"]
@@ -39,7 +38,5 @@ services:
       - "${HTTP_PORT}:3000"
       - "${SSH_PORT}:22"
     volumes:
-      # Dados da aplicação Gitea ficam dentro da pasta local gitea/data
       - ./gitea/data:/data
-      # Config principal (app.ini)
       - ./gitea/config/app.ini:/data/gitea/conf/app.ini

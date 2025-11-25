@@ -15,33 +15,37 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ------------------------------------------------------
 # Carrega variáveis de ambiente o mais cedo possível
-# (para DB, Django, Gitea, etc.)
 # ------------------------------------------------------
 
 GETEA_ENV = BASE_DIR / "doker" / "getea" / ".env"
 ROOT_ENV = BASE_DIR / ".env"
+EMAIL_ENV = BASE_DIR / ".env.email"
+
+# Carrega variáveis de e-mail separadamente (se existir)
+if EMAIL_ENV.exists():
+    load_dotenv(EMAIL_ENV, override=True)
 
 
-# Carrega primeiro getea/.env criado pelo instalador
 if GETEA_ENV.exists():
     load_dotenv(GETEA_ENV, override=False)
 
-# Depois tenta carregar .env raiz (sem sobrescrever)
 if ROOT_ENV.exists():
     load_dotenv(ROOT_ENV, override=False)
+
 
 # ======================================================
 # CONFIG BÁSICA
 # ======================================================
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-CHANGE-ME-IN-PROD")
-DEBUG = True  # Em prod, trocar para usar env, ex: os.environ.get("DJANGO_DEBUG") == "1"
+DEBUG = True
 
 ALLOWED_HOSTS = ["*", "127.0.0.1", "localhost"]
 CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:8000",
     "http://localhost:8000",
 ]
+
 
 # ======================================================
 # APPS
@@ -58,6 +62,7 @@ INSTALLED_APPS = [
     "accounts",
     "projects",
     "tasck",
+
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -119,8 +124,6 @@ WSGI_APPLICATION = "core.wsgi.application"
 # ======================================================
 # DB
 # ======================================================
-# Se tiver variáveis de Postgres no ambiente (ex: via Docker),
-# usa Postgres. Caso contrário, cai para SQLite (dev local).
 
 if os.environ.get("POSTGRES_DB") or os.environ.get("POSTGRES_HOST"):
     DATABASES = {
@@ -159,7 +162,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # ======================================================
 
 LANGUAGE_CODE = "en-us"
-TIME_ZONE = "UTC"  # se quiser, pode trocar depois para "America/Sao_Paulo"
+TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
@@ -202,11 +205,26 @@ CSRF_COOKIE_SAMESITE = "Lax"
 
 
 # ======================================================
-# EMAIL
+# EMAIL — SMTP REAL (RECUPERAR SENHA FUNCIONANDO)
 # ======================================================
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-DEFAULT_FROM_EMAIL = "TheManager <no-reply@example.com>"
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.smtp.EmailBackend",
+)
+
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", 587))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "1") == "1"
+EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "0") == "1"
+
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL",
+    "TheManager <no-reply@example.com>",
+)
+SERVER_EMAIL = os.environ.get("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 
 
 # ======================================================
@@ -214,9 +232,6 @@ DEFAULT_FROM_EMAIL = "TheManager <no-reply@example.com>"
 # ======================================================
 
 def _read_app_ini_root_url() -> str | None:
-    """
-    Lê ROOT_URL do getea/gitea/config/app.ini, caso exista.
-    """
     app_ini = BASE_DIR / "doker" / "getea" / "gitea" / "config" / "app.ini"
 
     if not app_ini.exists():
@@ -231,7 +246,6 @@ def _read_app_ini_root_url() -> str | None:
     return None
 
 
-# 1) pega do ambiente
 _gitea_base = (
     os.environ.get("GITEA_BASE_URL") or
     os.environ.get("ROOT_URL")
@@ -239,11 +253,9 @@ _gitea_base = (
 
 _gitea_token = os.environ.get("GITEA_ADMIN_TOKEN")
 
-# 2) fallback da URL → app.ini
 if not _gitea_base:
     _gitea_base = _read_app_ini_root_url()
 
-# 3) fallback final
 if not _gitea_base:
     _gitea_base = "http://localhost:3000"
 
@@ -254,8 +266,6 @@ GITEA_APP_INI = str(
     BASE_DIR / "doker" / "getea" / "gitea" / "config" / "app.ini"
 )
 
-
-# Loga aviso se DEBUG e token ausente
 if DEBUG and not GITEA_ADMIN_TOKEN:
     import logging
     logging.getLogger(__name__).warning(

@@ -52,8 +52,9 @@ TZ_VAL="$(detect_tz)"
 GITEA_DB_NAME="${GITEA_DB_NAME:-gitea}"
 GITEA_DB_USER="${GITEA_DB_USER:-gitea}"
 
-GITEA_ADMIN_USER="${GITEA_ADMIN_USER:-manager}"
-GITEA_ADMIN_EMAIL="${GITEA_ADMIN_EMAIL:-manager@vinha.ai}"
+# Deixo o padrão bater com o que você quer no Django
+GITEA_ADMIN_USER="${GITEA_ADMIN_USER:-admim}"
+GITEA_ADMIN_EMAIL="${GITEA_ADMIN_EMAIL:-admim@admim.com}"
 
 # ---------- gerar segredos ----------
 echo "-> Gerando segredos…"
@@ -103,8 +104,6 @@ ROOT_URL=${ROOT_URL}
 EOF
 
 # ---------- escrever docker-compose.yml ----------
-# IMPORTANTE: usamos 'EOF' com aspas simples para manter ${VAR}
-# e deixar o Docker Compose expandir a partir do .env
 echo "-> Escrevendo ${COMPOSE_FILE}"
 cat > "${COMPOSE_FILE}" <<'EOF'
 services:
@@ -123,7 +122,6 @@ services:
       - "--character-set-server=utf8mb4"
       - "--collation-server=utf8mb4_unicode_ci"
     volumes:
-      # Banco de dados fica dentro da pasta local gitea/db
       - ./gitea/db:/var/lib/mysql
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"${MYSQL_ROOT_PASSWORD}\" || exit 1"]
@@ -148,9 +146,7 @@ services:
       - "${HTTP_PORT}:3000"
       - "${SSH_PORT}:22"
     volumes:
-      # Dados da aplicação Gitea ficam dentro da pasta local gitea/data
       - ./gitea/data:/data
-      # Config principal (app.ini)
       - ./gitea/config/app.ini:/data/gitea/conf/app.ini
 EOF
 

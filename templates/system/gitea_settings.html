@@ -1,0 +1,262 @@
+{% extends "base_sidebar.html" %}
+{% load static %}
+
+{% block title %}Gitea Settings{% endblock %}
+
+{% block content %}
+<div class="mx-auto" style="max-width: 980px;">
+  <div class="og-card p-4">
+
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h1 class="h5 m-0">Gitea Settings</h1>
+      <a href="{% url 'system_settings:home' %}" class="btn btn-outline-secondary btn-sm">Back to settings</a>
+    </div>
+
+    {% if form.non_field_errors %}
+      <div class="alert alert-warning py-2 mb-3">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} py-2 mb-2">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      <div class="row g-3">
+        <!-- USE_EXTERNAL_GITEA -->
+        <div class="col-12">
+          <div class="form-check">
+            {{ form.use_external_gitea }}
+            <label class="form-check-label" for="{{ form.use_external_gitea.id_for_label }}">
+              {{ form.use_external_gitea.label }}
+            </label>
+          </div>
+          {% if form.use_external_gitea.errors %}
+            <div class="text-danger small d-block">{{ form.use_external_gitea.errors|striptags }}</div>
+          {% endif %}
+          <div class="form-text small">
+            When enabled, TheManager will use an external Gitea instance and will not manage the local Docker stack.
+          </div>
+        </div>
+
+        <!-- GITEA_BASE_URL -->
+        <div class="col-md-8">
+          <div class="form-floating">
+            <input type="text"
+                   class="form-control{% if form.gitea_base_url.errors %} is-invalid{% endif %}"
+                   id="{{ form.gitea_base_url.id_for_label }}"
+                   name="{{ form.gitea_base_url.html_name }}"
+                   value="{{ form.gitea_base_url.value|default_if_none:'' }}"
+                   placeholder="Gitea base URL">
+            <label for="{{ form.gitea_base_url.id_for_label }}">GITEA_BASE_URL</label>
+            {% if form.gitea_base_url.errors %}
+              <div class="invalid-feedback d-block">{{ form.gitea_base_url.errors|striptags }}</div>
+            {% endif %}
+          </div>
+          <div class="form-text small">
+            Example: http://192.168.0.10:3000 or https://git.example.com
+          </div>
+        </div>
+
+        <!-- GITEA_ADMIN_TOKEN -->
+        <div class="col-md-4">
+          <div class="form-floating">
+            <input type="password"
+                   class="form-control{% if form.gitea_admin_token.errors %} is-invalid{% endif %}"
+                   id="{{ form.gitea_admin_token.id_for_label }}"
+                   name="{{ form.gitea_admin_token.html_name }}"
+                   value="{{ form.gitea_admin_token.value|default_if_none:'' }}"
+                   placeholder="Admin token">
+            <label for="{{ form.gitea_admin_token.id_for_label }}">GITEA_ADMIN_TOKEN</label>
+            {% if form.gitea_admin_token.errors %}
+              <div class="invalid-feedback d-block">{{ form.gitea_admin_token.errors|striptags }}</div>
+            {% endif %}
+          </div>
+          <div class="form-text small">
+            Admin token with permission to create users and repositories.
+          </div>
+        </div>
+      </div>
+
+      <hr class="my-3">
+
+      <div class="alert alert-warning py-2 small">
+        <strong>Local Gitea stack</strong><br>
+        The fields below are used only when <em>Gitea externo</em> is <strong>disabled</strong>.
+        Changing them will affect your local Gitea Docker setup (doker/getea/.env).
+      </div>
+
+      <div class="row g-3">
+        <!-- DB NAME / USER -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="text"
+                   class="form-control{% if form.gitea_db_name.errors %} is-invalid{% endif %}"
+                   id="{{ form.gitea_db_name.id_for_label }}"
+                   name="{{ form.gitea_db_name.html_name }}"
+                   value="{{ form.gitea_db_name.value|default_if_none:'gitea' }}"
+                   placeholder="Gitea DB name">
+            <label for="{{ form.gitea_db_name.id_for_label }}">GITEA_DB_NAME</label>
+            {% if form.gitea_db_name.errors %}
+              <div class="invalid-feedback d-block">{{ form.gitea_db_name.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="text"
+                   class="form-control{% if form.gitea_db_user.errors %} is-invalid{% endif %}"
+                   id="{{ form.gitea_db_user.id_for_label }}"
+                   name="{{ form.gitea_db_user.html_name }}"
+                   value="{{ form.gitea_db_user.value|default_if_none:'gitea' }}"
+                   placeholder="Gitea DB user">
+            <label for="{{ form.gitea_db_user.id_for_label }}">GITEA_DB_USER</label>
+            {% if form.gitea_db_user.errors %}
+              <div class="invalid-feedback d-block">{{ form.gitea_db_user.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- MYSQL_ROOT_PASSWORD / MYSQL_PASSWORD -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="password"
+                   class="form-control{% if form.mysql_root_password.errors %} is-invalid{% endif %}"
+                   id="{{ form.mysql_root_password.id_for_label }}"
+                   name="{{ form.mysql_root_password.html_name }}"
+                   value="{{ form.mysql_root_password.value|default_if_none:'' }}"
+                   placeholder="MySQL root password">
+            <label for="{{ form.mysql_root_password.id_for_label }}">MYSQL_ROOT_PASSWORD</label>
+            {% if form.mysql_root_password.errors %}
+              <div class="invalid-feedback d-block">{{ form.mysql_root_password.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="password"
+                   class="form-control{% if form.mysql_password.errors %} is-invalid{% endif %}"
+                   id="{{ form.mysql_password.id_for_label }}"
+                   name="{{ form.mysql_password.html_name }}"
+                   value="{{ form.mysql_password.value|default_if_none:'' }}"
+                   placeholder="MySQL user password">
+            <label for="{{ form.mysql_password.id_for_label }}">MYSQL_PASSWORD</label>
+            {% if form.mysql_password.errors %}
+              <div class="invalid-feedback d-block">{{ form.mysql_password.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- GITEA_SECRET_KEY -->
+        <div class="col-12">
+          <div class="form-floating">
+            <input type="password"
+                   class="form-control{% if form.gitea_secret_key.errors %} is-invalid{% endif %}"
+                   id="{{ form.gitea_secret_key.id_for_label }}"
+                   name="{{ form.gitea_secret_key.html_name }}"
+                   value="{{ form.gitea_secret_key.value|default_if_none:'' }}"
+                   placeholder="Gitea secret key">
+            <label for="{{ form.gitea_secret_key.id_for_label }}">GITEA_SECRET_KEY</label>
+            {% if form.gitea_secret_key.errors %}
+              <div class="invalid-feedback d-block">{{ form.gitea_secret_key.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- GITEA_INTERNAL_TOKEN -->
+        <div class="col-12">
+          <div class="form-floating">
+            <input type="password"
+                   class="form-control{% if form.gitea_internal_token.errors %} is-invalid{% endif %}"
+                   id="{{ form.gitea_internal_token.id_for_label }}"
+                   name="{{ form.gitea_internal_token.html_name }}"
+                   value="{{ form.gitea_internal_token.value|default_if_none:'' }}"
+                   placeholder="Internal token">
+            <label for="{{ form.gitea_internal_token.id_for_label }}">GITEA_INTERNAL_TOKEN</label>
+            {% if form.gitea_internal_token.errors %}
+              <div class="invalid-feedback d-block">{{ form.gitea_internal_token.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- GITEA_JWT_SECRET -->
+        <div class="col-12">
+          <div class="form-floating">
+            <input type="password"
+                   class="form-control{% if form.gitea_jwt_secret.errors %} is-invalid{% endif %}"
+                   id="{{ form.gitea_jwt_secret.id_for_label }}"
+                   name="{{ form.gitea_jwt_secret.html_name }}"
+                   value="{{ form.gitea_jwt_secret.value|default_if_none:'' }}"
+                   placeholder="JWT secret">
+            <label for="{{ form.gitea_jwt_secret.id_for_label }}">GITEA_JWT_SECRET</label>
+            {% if form.gitea_jwt_secret.errors %}
+              <div class="invalid-feedback d-block">{{ form.gitea_jwt_secret.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- ADMIN USER / PASS / EMAIL -->
+        <div class="col-md-4">
+          <div class="form-floating">
+            <input type="text"
+                   class="form-control{% if form.gitea_admin_user.errors %} is-invalid{% endif %}"
+                   id="{{ form.gitea_admin_user.id_for_label }}"
+                   name="{{ form.gitea_admin_user.html_name }}"
+                   value="{{ form.gitea_admin_user.value|default_if_none:'' }}"
+                   placeholder="Admin user">
+            <label for="{{ form.gitea_admin_user.id_for_label }}">GITEA_ADMIN_USER</label>
+            {% if form.gitea_admin_user.errors %}
+              <div class="invalid-feedback d-block">{{ form.gitea_admin_user.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <div class="form-floating">
+            <input type="password"
+                   class="form-control{% if form.gitea_admin_pass.errors %} is-invalid{% endif %}"
+                   id="{{ form.gitea_admin_pass.id_for_label }}"
+                   name="{{ form.gitea_admin_pass.html_name }}"
+                   value="{{ form.gitea_admin_pass.value|default_if_none:'' }}"
+                   placeholder="Admin password">
+            <label for="{{ form.gitea_admin_pass.id_for_label }}">GITEA_ADMIN_PASS</label>
+            {% if form.gitea_admin_pass.errors %}
+              <div class="invalid-feedback d-block">{{ form.gitea_admin_pass.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <div class="form-floating">
+            <input type="email"
+                   class="form-control{% if form.gitea_admin_email.errors %} is-invalid{% endif %}"
+                   id="{{ form.gitea_admin_email.id_for_label }}"
+                   name="{{ form.gitea_admin_email.html_name }}"
+                   value="{{ form.gitea_admin_email.value|default_if_none:'' }}"
+                   placeholder="Admin email">
+            <label for="{{ form.gitea_admin_email.id_for_label }}">GITEA_ADMIN_EMAIL</label>
+            {% if form.gitea_admin_email.errors %}
+              <div class="invalid-feedback d-block">{{ form.gitea_admin_email.errors|striptags }}</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-end mt-4 gap-2">
+        <a href="{% url 'system_settings:home' %}" class="btn btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+
+  </div>
+</div>
+{% endblock %}

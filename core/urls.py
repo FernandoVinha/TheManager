@@ -6,9 +6,13 @@ from django.conf import settings
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("", include("accounts.urls")),  # signup/login/lista do Gitea
+
+    path("", include("accounts.urls")),   # login/signup
     path("projects/", include("projects.urls")),
     path("", include(("tasck.urls", "tasck"), namespace="tasck")),
+
+    # NOVO — módulo system_settings
+    path("settings/", include(("system_settings.urls", "system_settings"), namespace="system_settings")),
 ]
 
 if settings.DEBUG:

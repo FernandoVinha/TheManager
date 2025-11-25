@@ -32,7 +32,7 @@
         display:flex; align-items:center; gap:.75rem; border-radius:10px; padding:.5rem .75rem;
         color:var(--text-main);
       }
-      .sidebar .nav-link:hover{ background:#f1f3f8; }
+      .sidebar .nav-link:hover{ background:#f1f3f8; text-decoration:none; }
       .sidebar .nav-link.active{ background:#ece8ff; color:#3b2bcf; }
       .sidebar .icon{
         width:22px; text-align:center; opacity:.9;
@@ -93,14 +93,24 @@
               <span class="icon">👥</span><span class="text">Gitea Users</span>
             </a>
 
-            {# ITEM: Support (app support, namespace 'suporte') #}
+            {# ITEM: Support (placeholder) #}
             <a class="nav-link {% if request.path|slice:':9' == '/support/' %}active{% endif %}"
-               href="{''}">
+               href="#">
               <span class="icon">🛟</span><span class="text">Support</span>
             </a>
             {# /ITEM #}
 
-            <!-- Add more items as needed -->
+            {% if request.user.is_superuser %}
+              <hr class="my-2">
+
+              <a class="nav-link {% if request.path|slice:':10' == '/settings/' and request.path == '/settings/' %}active{% endif %}"
+                 href="/settings/">
+                <span class="icon">⚙️</span><span class="text">System Settings</span>
+              </a>
+
+            
+            {% endif %}
+
           {% else %}
             <a class="nav-link" href="{% url 'login' %}">
               <span class="icon">➡️</span><span class="text">Sign in</span>
