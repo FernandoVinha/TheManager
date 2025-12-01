@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
@@ -111,7 +109,7 @@ class TaskCreateView(LoginRequiredMixin, CreateView):
         """
         Se vier ?project=ID, valida permissão e fixa o projeto.
         """
-        self.fixed_project = None
+        self.fixed_project: Project | None = None
         project_id = request.GET.get("project")
         if project_id:
             project = get_object_or_404(Project, pk=project_id)
@@ -231,6 +229,14 @@ class TaskUpdateView(LoginRequiredMixin, UpdateView):
             raise PermissionDenied("You cannot edit this task.")
         return super().dispatch(request, *args, **kwargs)
 
+    def get_form_kwargs(self):
+        """
+        Passa o project atual para o form (para filtrar assignee).
+        """
+        kwargs = super().get_form_kwargs()
+        kwargs["project"] = self.object.project
+        return kwargs
+
     def form_valid(self, form):
         messages.success(self.request, "Task updated successfully.")
         return super().form_valid(form)
@@ -268,7 +274,8 @@ class TaskMembersView(LoginRequiredMixin, View):
         task = self._get_task(pk)
         if not _user_can_edit_project(request.user, task.project):
             raise PermissionDenied("You cannot manage members for this task.")
-        form = TaskMemberForm()
+        # usa o task para filtrar possíveis usuários
+        form = TaskMemberForm(task=task)
         memberships = task.memberships.select_related("user").all()
         return render(
             request,
@@ -281,7 +288,7 @@ class TaskMembersView(LoginRequiredMixin, View):
         if not _user_can_edit_project(request.user, task.project):
             raise PermissionDenied("You cannot manage members for this task.")
 
-        form = TaskMemberForm(request.POST)
+        form = TaskMemberForm(request.POST, task=task)
         if form.is_valid():
             member = form.save(commit=False)
             member.task = task
@@ -362,6 +369,7 @@ class KanbanStatusUpdateView(LoginRequiredMixin, View):
     URL: /projects/<project_id>/kanban/status/<task_id>/
     Método: POST, campo "status"
     """
+
     def post(self, request: HttpRequest, project_id: int, task_id: int) -> JsonResponse:
         project = get_object_or_404(Project, pk=project_id)
         task = get_object_or_404(Task, pk=task_id, project=project)
@@ -461,6 +469,7 @@ class LabelCreateAjaxView(LoginRequiredMixin, View):
     Cria Label via AJAX.
     POST: name, color (#rrggbb opcional)
     """
+
     def post(self, request):
         name = (request.POST.get("name") or "").strip()
         color = (request.POST.get("color") or "#6b4ce6").strip() or "#6b4ce6"
@@ -469,8 +478,10 @@ class LabelCreateAjaxView(LoginRequiredMixin, View):
                 {"ok": False, "error": "Name is required"}, status=400
             )
 
+        # Nome é único; se a label já existir, atualiza a cor (se diferente)
         label, created = Label.objects.get_or_create(
-            name=name, defaults={"color": color}
+            name=name,
+            defaults={"color": color},
         )
         if not created and label.color != color and color:
             label.color = color

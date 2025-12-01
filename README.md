@@ -113,22 +113,3 @@ O projeto é dividido em módulos independentes, permitindo evolução contínua
 
 ---
 
-## ⚙️ Instalação e Execução Local
-
-```bash
-# 1. Crie o ambiente virtual
-python -m venv venv
-source venv/bin/activate  # ou venv\\Scripts\\activate (Windows)
-
-# 2. Instale dependências
-pip install django pillow
-
-# 3. Rode as migrações
-python manage.py makemigrations
-python manage.py migrate
-
-# 4. Crie o superusuário
-python manage.py createsuperuser --email admin@local.com
-
-# 5. Inicie o servidor
-python manage.py runserver

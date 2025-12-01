@@ -93,7 +93,8 @@ INSTALLED_APPS = [
     # apps do projeto
     "accounts",
     "projects",
-    "task",  # verifique se seu app se chama mesmo "task"; ajuste para "tasck" se necessário
+    "tasck.apps.TasckConfig",
+    "commits",
 ]
 
 AUTH_USER_MODEL = "accounts.User"

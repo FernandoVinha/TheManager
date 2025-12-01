@@ -20,7 +20,8 @@ class Label(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["name", "color"], name="uniq_label_name_color"),
+            # Nome único; cor pode ser alterada
+            models.UniqueConstraint(fields=["name"], name="uniq_label_name"),
         ]
         ordering = ["name"]
 
@@ -49,16 +50,32 @@ class Task(models.Model):
     key = models.SlugField(max_length=64, help_text="Short key (unique per project)")
     description = models.TextField(blank=True)
 
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.TODO, db_index=True)
-    priority = models.CharField(max_length=16, choices=Priority.choices, default=Priority.MEDIUM, db_index=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.TODO,
+        db_index=True,
+    )
+    priority = models.CharField(
+        max_length=16,
+        choices=Priority.choices,
+        default=Priority.MEDIUM,
+        db_index=True,
+    )
 
     reporter = models.ForeignKey(
-        User, on_delete=models.PROTECT, related_name="reported_tasks",
-        help_text="Quem criou/relatou a task"
+        User,
+        on_delete=models.PROTECT,
+        related_name="reported_tasks",
+        help_text="Quem criou/relatou a task",
     )
     assignee = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, blank=True,
-        related_name="assigned_tasks", help_text="Responsável atual"
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_tasks",
+        help_text="Responsável atual",
     )
 
     labels = models.ManyToManyField(Label, blank=True, related_name="tasks")
@@ -89,9 +106,32 @@ class Task(models.Model):
         return f"{self.project.key}-{self.key}: {self.title}"
 
     def save(self, *args, **kwargs):
+        """
+        Gera `key` automaticamente a partir do título, garantindo unicidade por projeto.
+        Ex.: "minha-task", "minha-task-2", "minha-task-3", ...
+        """
         if not self.key:
-            base = slugify(self.title)[: self._meta.get_field("key").max_length]
-            self.key = base or "task"
+            base = slugify(self.title) or "task"
+            max_len = self._meta.get_field("key").max_length
+            base = base[:max_len]
+
+            key = base
+            ModelClass = self.__class__
+
+            if self.project_id:
+                qs = ModelClass.objects.filter(project=self.project)
+            else:
+                # fallback raro (antes de setar project)
+                qs = ModelClass.objects.all()
+
+            i = 2
+            while qs.filter(key=key).exists():
+                suffix = f"-{i}"
+                key = (base[: max_len - len(suffix)]) + suffix
+                i += 1
+
+            self.key = key
+
         super().save(*args, **kwargs)
 
 
@@ -124,14 +164,24 @@ class TaskMessage(models.Model):
 
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="messages")
     agent = models.CharField(max_length=16, choices=Agent.choices, default=Agent.USER)
-    author_name = models.CharField(max_length=120, blank=True, help_text="Nome livre do autor")
+    author_name = models.CharField(
+        max_length=120,
+        blank=True,
+        help_text="Nome livre do autor",
+    )
     text = models.TextField()
-    payload = models.JSONField(null=True, blank=True, help_text="Metadata opcional (ex.: resposta da API do Gitea)")
+    payload = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Metadata opcional (ex.: resposta da API do Gitea)",
+    )
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
         ordering = ["created_at", "pk"]
-        indexes = [models.Index(fields=["task", "created_at"])]
+        indexes = [
+            models.Index(fields=["task", "created_at"]),
+        ]
 
     def __str__(self) -> str:
         who = self.author_name or self.get_agent_display()
@@ -157,7 +207,10 @@ class TaskCommit(models.Model):
 
     code_quality_text = models.TextField(blank=True)
     resolution_text = models.TextField(blank=True)
-    processed = models.BooleanField(default=False, help_text="Se este commit já foi processado por IA.")
+    processed = models.BooleanField(
+        default=False,
+        help_text="Se este commit já foi processado por IA.",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
