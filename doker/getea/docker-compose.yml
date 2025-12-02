@@ -21,6 +21,8 @@ services:
       timeout: 5s
       retries: 30
       start_period: 30s
+    networks:
+      - themanager-net
 
   gitea:
     image: gitea/gitea:latest
@@ -40,3 +42,9 @@ services:
     volumes:
       - ./gitea/data:/data
       - ./gitea/config/app.ini:/data/gitea/conf/app.ini
+    networks:
+      - themanager-net
+
+networks:
+  themanager-net:
+    external: true

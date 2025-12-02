@@ -124,7 +124,7 @@ class SignInView(LoginView):
 
     def get_success_url(self) -> str:
         # Após login, cair na entrada inteligente de usuários por padrão
-        return reverse_lazy("users")
+        return reverse_lazy("accounts:users")
 
 
 class SignOutView(LoginRequiredMixin, View):
@@ -132,12 +132,12 @@ class SignOutView(LoginRequiredMixin, View):
     def post(self, request: HttpRequest) -> HttpResponse:
         logout(request)
         messages.success(request, "You have been signed out.")
-        return redirect(reverse("login"))
+        return redirect(reverse("accounts:login"))
 
     def get(self, request: HttpRequest) -> HttpResponse:
         logout(request)
         messages.success(request, "You have been signed out.")
-        return redirect(reverse("login"))
+        return redirect(reverse("accounts:login"))
 
 
 # =========================================================
@@ -151,8 +151,8 @@ class UsersEntryView(LoginRequiredMixin, View):
     """
     def get(self, request: HttpRequest, *args, **kwargs):
         if request.user.can_manage_users:
-            return redirect(reverse("gitea_users"))
-        return redirect(reverse("profile"))
+            return redirect(reverse("accounts:gitea_users"))
+        return redirect(reverse("accounts:profile"))
 
 
 # =========================================================
@@ -169,7 +169,7 @@ class ProfileView(LoginRequiredMixin, UpdateView):
 
     def get_success_url(self):
         messages.success(self.request, "Profile updated.")
-        return reverse_lazy("profile")
+        return reverse_lazy("accounts:profile")
 
 
 # =========================================================
@@ -183,7 +183,7 @@ class GiteaUserListView(LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
         # Apenas admin/manager podem abrir a lista
         if not (request.user.can_manage_users):
-            return redirect("profile")
+            return redirect("accounts:profile")
 
         def to_int(val: Optional[str], default: int) -> int:
             try:
@@ -309,7 +309,7 @@ class UserCreateView(LoginRequiredMixin, View):
 
         # Se o backend SMTP enviou, informamos o admin e redirecionamos
         messages.success(request, "User created and an email to set password was sent.")
-        return _safe_redirect(request, default_name="gitea_users")
+        return _safe_redirect(request, default_name="accounts:gitea_users")
 
 
 # =========================================================
@@ -378,7 +378,7 @@ class PasswordResetConfirmView(View):
         if invite.is_expired():
             invite.delete()
             messages.error(request, "This link has expired. Please request a new one.")
-            return redirect(reverse("forgot_password"))
+            return redirect(reverse("accounts:forgot_password"))
         return render(request, self.template_name, {"form": PasswordSetupForm()})
 
     def post(self, request: HttpRequest, token: str) -> HttpResponse:
@@ -386,7 +386,7 @@ class PasswordResetConfirmView(View):
         if invite.is_expired():
             invite.delete()
             messages.error(request, "This link has expired. Please request a new one.")
-            return redirect(reverse("forgot_password"))
+            return redirect(reverse("accounts:forgot_password"))
 
         form = PasswordSetupForm(request.POST)
         if not form.is_valid():
@@ -407,7 +407,8 @@ class PasswordResetConfirmView(View):
         # Login automático
         login(request, user)
         messages.success(request, "Password updated. Welcome!")
-        return _safe_redirect(request, default_name="users")
+        # depois de ativar/resetar, vai para a página de usuários Gitea (admin vê lista, demais caem em profile via view)
+        return _safe_redirect(request, default_name="accounts:gitea_users")
 
 
 # =========================================================
@@ -426,7 +427,7 @@ class ResendInviteView(LoginRequiredMixin, View):
         # Managers não operam em Admin
         if request.user.is_manager() and target.is_admin():
             messages.error(request, "Managers cannot resend admin invitations.")
-            return _safe_redirect(request, default_name="gitea_users")
+            return _safe_redirect(request, default_name="accounts:gitea_users")
 
         existing = getattr(target, "invite", None)
         if existing:
@@ -448,7 +449,7 @@ class ResendInviteView(LoginRequiredMixin, View):
             )
 
         messages.success(request, "Invitation re-sent.")
-        return _safe_redirect(request, default_name="gitea_users")
+        return _safe_redirect(request, default_name="accounts:gitea_users")
 
 
 # =========================================================
@@ -465,11 +466,11 @@ class UserDeleteView(LoginRequiredMixin, View):
         # somente admin pode remover admin
         if user.is_admin() and not request.user.is_admin():
             messages.error(request, "Only admins can delete admin users.")
-            return redirect("gitea_users")
+            return redirect("accounts:gitea_users")
 
         user.delete()
         messages.success(request, "User deleted.")
-        return redirect("gitea_users")
+        return redirect("accounts:gitea_users")
 
 
 # =========================================================
@@ -499,7 +500,7 @@ class UserEditView(LoginRequiredMixin, View):
 
         form.save()
         messages.success(request, "User updated.")
-        return redirect("gitea_users")
+        return redirect("accounts:gitea_users")
 
 
 # =========================================================

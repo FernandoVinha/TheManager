@@ -9,7 +9,7 @@
 
     <div class="d-flex align-items-center justify-content-between mb-3">
       <h1 class="h5 m-0">{{ view.object|default:"New Project" }}</h1>
-      <a href="{% url 'project_list' %}" class="btn btn-outline-secondary btn-sm">Back to list</a>
+      <a href="{% url 'projects:project_list' %}" class="btn btn-outline-secondary btn-sm">Back to list</a>
     </div>
 
     {% if form.non_field_errors %}
@@ -230,7 +230,7 @@
       </div>
 
       <div class="d-flex justify-content-end mt-4 gap-2">
-        <a href="{% url 'project_list' %}" class="btn btn-outline-secondary">Cancel</a>
+        <a href="{% url 'projects:project_list' %}" class="btn btn-outline-secondary">Cancel</a>
         <button type="submit" class="btn btn-primary">Save</button>
       </div>
     </form>

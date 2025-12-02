@@ -1,7 +1,4 @@
-
-# ============================================================================
 # accounts/urls.py
-# ============================================================================
 from django.urls import path
 
 from .views import (
@@ -12,6 +9,8 @@ from .views import (
     UserEditView,
     DashboardView,
 )
+
+app_name = "accounts"
 
 urlpatterns = [
     # Auth

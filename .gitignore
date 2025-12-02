@@ -57,7 +57,7 @@ staticfiles/
 media/
 
 # ================================
-# Ambiente Virtual
+# venv / Ambiente Virtual
 # ================================
 .env
 .env.bak/
@@ -71,7 +71,7 @@ venv.bak/
 # ================================
 # Jupyter / IPython
 # ================================
-.ipynb_checkpoints
+.ipynb_checkpoints/
 profile_default/
 ipython_config.py
 
@@ -127,12 +127,14 @@ marimo/_lsp/
 __marimo__/
 
 # ================================
-# ================================
 # DOCKER / PROJETO THEMANAGER
 # ================================
-# ================================
 
-# ==== Ignorar tudo que vem do Gitea (Docker) ====
+# ==== Pasta Gitea inteira no host (gera erros de permissão) ====
+gitea/
+gitea/**
+
+# ==== Ignorar Gitea dentro de doker/ ====
 doker/getea/gitea/data/
 doker/getea/gitea/log/
 doker/getea/gitea/db/
@@ -141,11 +143,8 @@ doker/getea/gitea/indexers/
 doker/getea/gitea/repositories/
 doker/getea/gitea/ssh/
 doker/getea/.env
-doker/getea/docker-compose.yml
-
-# Muito importante para não quebrar o build
-# (gera o erro “permission denied”)
 doker/getea/gitea/**
+doker/getea/docker-compose.yml
 
 # ==== Logs / caches dos containers ====
 docker/
@@ -161,13 +160,12 @@ data/
 volumes/
 tmp/
 
-# === Excluir imagens/bancos gerados para testes ===
+# ==== Arquivos auxiliares / testes ====
 *.bak
 *.sql
 *.sqlite3
 *.sqlite
 
-
+# ==== Arquivos de ambiente ====
 .env*
 *.env
-

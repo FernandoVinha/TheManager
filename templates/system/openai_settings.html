@@ -1,0 +1,138 @@
+{% extends "base_sidebar.html" %}
+{% load static %}
+
+{% block title %}OpenAI / LLM Settings{% endblock %}
+
+{% block content %}
+<div class="mx-auto" style="max-width: 980px;">
+  <div class="og-card p-4">
+
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h1 class="h5 m-0">OpenAI / LLM Settings</h1>
+      <a href="{% url 'system_settings:home' %}" class="btn btn-outline-secondary btn-sm">Back to settings</a>
+    </div>
+
+    {% if form.non_field_errors %}
+      <div class="alert alert-warning py-2 mb-3">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} py-2 mb-2">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      <div class="row g-3">
+        <!-- ENABLE_OPENAI -->
+        <div class="col-12">
+          <div class="form-check">
+            {{ form.enable_openai }}
+            <label class="form-check-label" for="{{ form.enable_openai.id_for_label }}">
+              {{ form.enable_openai.label }}
+            </label>
+          </div>
+          {% if form.enable_openai.errors %}
+            <div class="text-danger small d-block">{{ form.enable_openai.errors|striptags }}</div>
+          {% endif %}
+          <div class="form-text small">
+            When enabled, TheManager will call the configured LLM (OpenAI-compatible API) for summaries, code analysis and RAG.
+          </div>
+        </div>
+
+        <!-- OPENAI_API_BASE -->
+        <div class="col-md-7">
+          <div class="form-floating">
+            <input type="text"
+                   class="form-control{% if form.openai_api_base.errors %} is-invalid{% endif %}"
+                   id="{{ form.openai_api_base.id_for_label }}"
+                   name="{{ form.openai_api_base.html_name }}"
+                   value="{{ form.openai_api_base.value|default_if_none:'https://api.openai.com/v1' }}"
+                   placeholder="API base URL">
+            <label for="{{ form.openai_api_base.id_for_label }}">OPENAI_API_BASE</label>
+            {% if form.openai_api_base.errors %}
+              <div class="invalid-feedback d-block">{{ form.openai_api_base.errors|striptags }}</div>
+            {% endif %}
+          </div>
+          <div class="form-text small">
+            Example: <code>https://api.openai.com/v1</code> or a compatible proxy base URL.
+          </div>
+        </div>
+
+        <!-- OPENAI_API_KEY -->
+        <div class="col-md-5">
+          <div class="form-floating">
+            <input type="password"
+                   class="form-control{% if form.openai_api_key.errors %} is-invalid{% endif %}"
+                   id="{{ form.openai_api_key.id_for_label }}"
+                   name="{{ form.openai_api_key.html_name }}"
+                   value="{{ form.openai_api_key.value|default_if_none:'' }}"
+                   placeholder="API key">
+            <label for="{{ form.openai_api_key.id_for_label }}">OPENAI_API_KEY</label>
+            {% if form.openai_api_key.errors %}
+              <div class="invalid-feedback d-block">{{ form.openai_api_key.errors|striptags }}</div>
+            {% endif %}
+          </div>
+          <div class="form-text small">
+            Secret API key used to authenticate requests to the LLM provider.
+          </div>
+        </div>
+      </div>
+
+      <hr class="my-3">
+
+      <div class="row g-3">
+        <!-- OPENAI_MODEL -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="text"
+                   class="form-control{% if form.openai_model.errors %} is-invalid{% endif %}"
+                   id="{{ form.openai_model.id_for_label }}"
+                   name="{{ form.openai_model.html_name }}"
+                   value="{{ form.openai_model.value|default_if_none:'gpt-4.1-mini' }}"
+                   placeholder="Chat/completion model">
+            <label for="{{ form.openai_model.id_for_label }}">OPENAI_MODEL</label>
+            {% if form.openai_model.errors %}
+              <div class="invalid-feedback d-block">{{ form.openai_model.errors|striptags }}</div>
+            {% endif %}
+          </div>
+          <div class="form-text small">
+            Main model used for conversations, explanations and code review.
+          </div>
+        </div>
+
+        <!-- OPENAI_EMBEDDINGS_MODEL -->
+        <div class="col-md-6">
+          <div class="form-floating">
+            <input type="text"
+                   class="form-control{% if form.openai_embeddings_model.errors %} is-invalid{% endif %}"
+                   id="{{ form.openai_embeddings_model.id_for_label }}"
+                   name="{{ form.openai_embeddings_model.html_name }}"
+                   value="{{ form.openai_embeddings_model.value|default_if_none:'text-embedding-3-large' }}"
+                   placeholder="Embeddings model">
+            <label for="{{ form.openai_embeddings_model.id_for_label }}">OPENAI_EMBEDDINGS_MODEL</label>
+            {% if form.openai_embeddings_model.errors %}
+              <div class="invalid-feedback d-block">{{ form.openai_embeddings_model.errors|striptags }}</div>
+            {% endif %}
+          </div>
+          <div class="form-text small">
+            Model used for vector embeddings (RAG over code, tasks and commits).
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-end mt-4 gap-2">
+        <a href="{% url 'system_settings:home' %}" class="btn btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+
+  </div>
+</div>
+{% endblock %}

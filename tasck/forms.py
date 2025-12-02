@@ -1,3 +1,4 @@
+#tasck/forms.py
 from __future__ import annotations
 
 from typing import Optional
@@ -7,7 +8,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import Q
 
 from projects.models import Project
-from .models import Task, Label, TaskMember, TaskMessage, TaskCommit
+from .models import Task, Label, TaskMember, TaskMessage
 
 User = get_user_model()
 
@@ -130,33 +131,6 @@ class TaskMessageForm(forms.ModelForm):
             "text": forms.Textarea(attrs={"style": "height: 100px"}),
         }
 
-
-class TaskCommitReviewForm(forms.ModelForm):
-    """
-    Formulário para o revisor preencher os campos de avaliação de IA e resolução da task.
-    Usa os campos REAIS do model TaskCommit: `code_quality_text` e `resolution_text`.
-    """
-
-    code_quality_text = forms.CharField(
-        required=False,
-        widget=forms.Textarea(
-            attrs={"style": "height: 90px", "class": "form-control"}
-        ),
-        help_text="Observações de qualidade do código (texto livre usado por IA).",
-        label="Code quality (text)",
-    )
-    resolution_text = forms.CharField(
-        required=False,
-        widget=forms.Textarea(
-            attrs={"style": "height: 70px", "class": "form-control"}
-        ),
-        help_text="Explique o que este commit resolve na task.",
-        label="What does this commit resolve?",
-    )
-
-    class Meta:
-        model = TaskCommit
-        fields = ["code_quality_text", "resolution_text", "processed"]
 
 
 class KanbanFilterForm(forms.Form):

@@ -10,7 +10,6 @@ from .views import (
     ProjectKanbanView,
     KanbanStatusUpdateView,
     ProjectTaskListView,
-    TaskCommitDetailView,
     LabelCreateAjaxView,
 )
 
@@ -32,7 +31,6 @@ urlpatterns = [
 
     path("projects/<int:project_id>/tasks/", ProjectTaskListView.as_view(), name="project_task_list"),
 
-    path("tasks/<int:task_id>/commits/<str:sha>/", TaskCommitDetailView.as_view(), name="commit_detail"),
 
     path("labels/ajax/create/", LabelCreateAjaxView.as_view(), name="label_create_ajax"),
 ]

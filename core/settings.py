@@ -278,7 +278,7 @@ _gitea_token = os.environ.get("GITEA_ADMIN_TOKEN")
 if not _gitea_base:
     _gitea_base = _read_app_ini_root_url()
 if not _gitea_base:
-    _gitea_base = "http://localhost:3000"
+    _gitea_base = "http://host.docker.internal:3000"
 
 GITEA_BASE_URL = _gitea_base
 GITEA_ADMIN_TOKEN = _gitea_token or ""

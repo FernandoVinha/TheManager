@@ -13,7 +13,11 @@
       {% csrf_token %}
 
       {# Preserve next so LoginView can redirect after successful login #}
-      <input type="hidden" name="next" value="{{ request.GET.next|default:request.POST.next|default:''|escape }}">
+      <input
+        type="hidden"
+        name="{{ redirect_field_name }}"
+        value="{{ redirect_field_value|default_if_none:''|escape }}"
+      >
 
       {# Non-field errors: mostra mensagem genérica para credenciais inválidas #}
       {% if form.non_field_errors %}
@@ -72,7 +76,7 @@
     </form>
 
     <div class="text-center mt-3">
-      <a href="{% url 'forgot_password' %}" class="text-decoration-none">
+      <a href="{% url 'accounts:forgot_password' %}" class="text-decoration-none">
         Forgot your password?
       </a>
     </div>

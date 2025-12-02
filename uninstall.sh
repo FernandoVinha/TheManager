@@ -2,97 +2,151 @@
 set -Eeuo pipefail
 export LC_ALL=C
 
-echo "========================================="
-echo "     DEEP UNINSTALL - SAFE PROJECT CLEAN"
-echo "========================================="
+# ===============================
+#  TheManager - Uninstaller
+# ===============================
 
+# ---------- utils ----------
 need() {
   command -v "$1" >/dev/null 2>&1 || { echo "Falta: $1"; exit 1; }
 }
 
+# ---------- paths ----------
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$PROJECT_DIR"
+
+GITEA_DIR="${PROJECT_DIR}/doker/getea"
+
+echo "=============================="
+echo "   TheManager - Uninstaller"
+echo "=============================="
+echo
+echo "Este script vai:"
+echo "  - Derrubar containers Docker do TheManager (web + db) e do Gitea"
+echo "  - Remover arquivos .env gerados automaticamente"
+echo "  - Remover dados do Gitea (repos, DB) em doker/getea/gitea/"
+echo
+echo "Backups .env.bak.* na raiz NÃO serão apagados."
+echo
+
+if [[ "${1:-}" != "--force" ]]; then
+  read -r -p "Tem certeza que deseja continuar? [y/N] " ans
+  ans="${ans:-N}"
+  case "$ans" in
+    y|Y|yes|YES)
+      echo "OK, continuando desinstalação..."
+      ;;
+    *)
+      echo "Cancelado."
+      exit 0
+      ;;
+  esac
+fi
+
 need docker
 
+# -------------------------------------------------------------------
+# 1) Derrubar containers do Django (web + db) na raiz
+# -------------------------------------------------------------------
 echo
-echo "Digite o NOME DO PROJETO a ser removido:"
-echo "(ex: TheManager, getea, omniguardian, flybiohub)"
-read -r PROJECT_NAME
+echo "=============================="
+echo "  Passo 1: Derrubando stack do TheManager (docker compose)"
+echo "=============================="
 
-if [ -z "$PROJECT_NAME" ]; then
-  echo "ERRO: nome inválido."
-  exit 1
+if [ -f "${PROJECT_DIR}/docker-compose.yml" ]; then
+  echo "-> Encontrado docker-compose.yml na raiz. Rodando: docker compose down -v"
+  (cd "$PROJECT_DIR" && docker compose down -v) || {
+    echo "⚠ Aviso: falha ao derrubar containers na raiz (ignorando)."
+  }
+else
+  echo "-> Nenhum docker-compose.yml na raiz. Pulando..."
+fi
+
+# -------------------------------------------------------------------
+# 2) Derrubar stack do Gitea em doker/getea
+# -------------------------------------------------------------------
+echo
+echo "=============================="
+echo "  Passo 2: Derrubando stack do Gitea (doker/getea)"
+echo "=============================="
+
+if [ -d "$GITEA_DIR" ] && [ -f "${GITEA_DIR}/docker-compose.yml" ]; then
+  echo "-> Encontrado docker-compose.yml em doker/getea. Rodando: docker compose down -v"
+  (cd "$GITEA_DIR" && docker compose down -v) || {
+    echo "⚠ Aviso: falha ao derrubar stack do Gitea (ignorando)."
+  }
+else
+  echo "-> Pasta doker/getea ou docker-compose.yml não encontrados. Pulando..."
+fi
+
+# -------------------------------------------------------------------
+# 3) Remover arquivos .env e configs geradas
+# -------------------------------------------------------------------
+echo
+echo "=============================="
+echo "  Passo 3: Removendo arquivos de configuração gerados"
+echo "=============================="
+
+# .env principal
+if [ -f "${PROJECT_DIR}/.env" ]; then
+  echo "-> Removendo ${PROJECT_DIR}/.env"
+  rm -f "${PROJECT_DIR}/.env"
+else
+  echo "-> .env na raiz não encontrado (talvez já removido)."
+fi
+
+# .env.email (se existir)
+if [ -f "${PROJECT_DIR}/.env.email" ]; then
+  echo "-> Removendo ${PROJECT_DIR}/.env.email"
+  rm -f "${PROJECT_DIR}/.env.email"
+else
+  echo "-> .env.email não encontrado (ok)."
+fi
+
+# NÃO remover .env.bak.* (backups)
+echo "-> Mantendo backups .env.bak.* na raiz (se existirem)."
+
+# .env do Gitea
+if [ -f "${GITEA_DIR}/.env" ]; then
+  echo "-> Removendo ${GITEA_DIR}/.env"
+  rm -f "${GITEA_DIR}/.env"
+fi
+
+# docker-compose.yml do Gitea
+if [ -f "${GITEA_DIR}/docker-compose.yml" ]; then
+  echo "-> Removendo ${GITEA_DIR}/docker-compose.yml"
+  rm -f "${GITEA_DIR}/docker-compose.yml"
+fi
+
+# app.ini do Gitea
+if [ -f "${GITEA_DIR}/gitea/config/app.ini" ]; then
+  echo "-> Removendo ${GITEA_DIR}/gitea/config/app.ini"
+  rm -f "${GITEA_DIR}/gitea/config/app.ini"
+fi
+
+# -------------------------------------------------------------------
+# 4) Remover dados do Gitea (repos, db, config)
+# -------------------------------------------------------------------
+echo
+echo "=============================="
+echo "  Passo 4: Removendo dados do Gitea"
+echo "=============================="
+
+if [ -d "${GITEA_DIR}/gitea" ]; then
+  echo "-> Removendo diretório ${GITEA_DIR}/gitea (data, db, config)"
+  rm -rf "${GITEA_DIR}/gitea"
+else
+  echo "-> Diretório ${GITEA_DIR}/gitea não encontrado (ok)."
 fi
 
 echo
-echo "=== PROCURANDO QUALQUER STACK DOCKER RELACIONADA A: $PROJECT_NAME ==="
+echo "============================================="
+echo "  Desinstalação concluída."
+echo "============================================="
+echo "Arquivos preservados:"
+echo "  - Backups .env.bak.* na raiz (caso existam)"
 echo
-
-# --------------------------------------------
-# 1. Remover containers relacionados
-# --------------------------------------------
-echo "-> Derrubando containers relacionados ao projeto..."
-docker ps -a --format "{{.ID}} {{.Names}}" | grep -i "$PROJECT_NAME" | while read -r ID NAME; do
-  echo "   - Removendo container: $NAME"
-  docker rm -f "$ID" >/dev/null 2>&1 || true
-done
-
-# --------------------------------------------
-# 2. Remover imagens relacionadas
-# --------------------------------------------
-echo "-> Removendo imagens relacionadas..."
-docker images --format "{{.ID}} {{.Repository}}" | grep -i "$PROJECT_NAME" | while read -r ID REPO; do
-  echo "   - Removendo imagem: $REPO"
-  docker rmi -f "$ID" >/dev/null 2>&1 || true
-done
-
-# --------------------------------------------
-# 3. Remover volumes relacionados
-# --------------------------------------------
-echo "-> Removendo volumes relacionados..."
-docker volume ls --format "{{.Name}}" | grep -i "$PROJECT_NAME" | while read -r VOL; do
-  echo "   - Removendo volume: $VOL"
-  docker volume rm -f "$VOL" >/dev/null 2>&1 || true
-done
-
-# --------------------------------------------
-# 4. Remover redes relacionadas
-# --------------------------------------------
-echo "-> Removendo redes relacionadas..."
-docker network ls --format "{{.Name}}" | grep -i "$PROJECT_NAME" | while read -r NET; do
-  echo "   - Removendo rede: $NET"
-  docker network rm "$NET" >/dev/null 2>&1 || true
-done
-
-# --------------------------------------------
-# 5. Remover pastas e arquivos da instalação antiga
-# --------------------------------------------
-SEARCH_DIRS=(
-  "$PROJECT_NAME"
-  "doker/$PROJECT_NAME"
-  "docker/$PROJECT_NAME"
-  "docker-compose-$PROJECT_NAME"
-)
-
-echo "-> Apagando pastas relacionadas..."
-for DIR in "${SEARCH_DIRS[@]}"; do
-  if [ -d "$DIR" ]; then
-    echo "   - Removendo pasta: $DIR"
-    rm -rf "$DIR"
-  fi
-done
-
-echo "-> Apagando arquivos .env relacionados..."
-find . -maxdepth 3 -type f -iname "*${PROJECT_NAME}*.env*" -print -delete 2>/dev/null || true
-
-echo "-> Removendo caches, venvs e build lixos..."
-find . -type d -iname "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-find . -type d -iname "venv" -exec rm -rf {} + 2>/dev/null || true
-find . -type d -iname "env" -exec rm -rf {} + 2>/dev/null || true
-find . -type d -iname "build" -exec rm -rf {} + 2>/dev/null || true
-find . -type d -iname "dist" -exec rm -rf {} + 2>/dev/null || true
-
-echo
-echo "========================================="
-echo "    REMOÇÃO COMPLETA FINALIZADA!"
-echo "    Projeto limpo: $PROJECT_NAME"
-echo "========================================="
+echo "Se quiser remover o projeto inteiro, você ainda pode apagar manualmente:"
+echo "  - o diretório do TheManager (${PROJECT_DIR})"
+echo "============================================="
 echo

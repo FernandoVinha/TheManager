@@ -1,3 +1,4 @@
+#tasck/models.py
 from __future__ import annotations
 
 from django.conf import settings
@@ -188,41 +189,3 @@ class TaskMessage(models.Model):
         return f"[{who}] {self.text[:60]}"
 
 
-class TaskCommit(models.Model):
-    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="commits")
-    sha = models.CharField(max_length=64, db_index=True)
-
-    author_name = models.CharField(max_length=160, blank=True)
-    author_email = models.CharField(max_length=160, blank=True)
-    committed_date = models.DateTimeField(null=True, blank=True)
-
-    title = models.CharField(max_length=300)
-    message = models.TextField(blank=True)
-
-    additions = models.IntegerField(default=0)
-    deletions = models.IntegerField(default=0)
-    files_changed = models.IntegerField(default=0)
-
-    html_url = models.URLField(blank=True)
-
-    code_quality_text = models.TextField(blank=True)
-    resolution_text = models.TextField(blank=True)
-    processed = models.BooleanField(
-        default=False,
-        help_text="Se este commit já foi processado por IA.",
-    )
-
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=["task", "sha"], name="uniq_task_commit_sha"),
-        ]
-        ordering = ["-committed_date", "-id"]
-        indexes = [
-            models.Index(fields=["task", "sha"]),
-            models.Index(fields=["task", "committed_date"]),
-        ]
-
-    def __str__(self) -> str:
-        return f"{self.sha[:7]} — {self.title}"

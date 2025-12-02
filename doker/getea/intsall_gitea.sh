@@ -41,7 +41,7 @@ detect_tz() {
 }
 
 # ---------- defaults ----------
-ROOT_DOMAIN="${ROOT_DOMAIN:-localhost}"
+ROOT_DOMAIN="${ROOT_DOMAIN:-127.0.0.1}"
 HTTP_PORT="${HTTP_PORT:-3000}"
 SSH_PORT="${SSH_PORT:-222}"
 
@@ -52,9 +52,12 @@ TZ_VAL="$(detect_tz)"
 GITEA_DB_NAME="${GITEA_DB_NAME:-gitea}"
 GITEA_DB_USER="${GITEA_DB_USER:-gitea}"
 
-# Deixo o padrão bater com o que você quer no Django
-GITEA_ADMIN_USER="${GITEA_ADMIN_USER:-admim}"
-GITEA_ADMIN_EMAIL="${GITEA_ADMIN_EMAIL:-admim@admim.com}"
+# Admin padrão
+GITEA_ADMIN_USER="${GITEA_ADMIN_USER:-admin}"
+GITEA_ADMIN_EMAIL="${GITEA_ADMIN_EMAIL:-admin@admin.com}"
+
+# Nome da rede Docker compartilhada (criada pelo install.sh da raiz)
+NETWORK_NAME="${NETWORK_NAME:-themanager-net}"
 
 # ---------- gerar segredos ----------
 echo "-> Gerando segredos…"
@@ -101,6 +104,8 @@ GITEA_ADMIN_EMAIL=${GITEA_ADMIN_EMAIL}
 
 ROOT_DOMAIN=${ROOT_DOMAIN}
 ROOT_URL=${ROOT_URL}
+
+NETWORK_NAME=${NETWORK_NAME}
 EOF
 
 # ---------- escrever docker-compose.yml ----------
@@ -129,6 +134,8 @@ services:
       timeout: 5s
       retries: 30
       start_period: 30s
+    networks:
+      - themanager-net
 
   gitea:
     image: gitea/gitea:latest
@@ -148,6 +155,12 @@ services:
     volumes:
       - ./gitea/data:/data
       - ./gitea/config/app.ini:/data/gitea/conf/app.ini
+    networks:
+      - themanager-net
+
+networks:
+  themanager-net:
+    external: true
 EOF
 
 # ---------- escrever app.ini ----------
@@ -199,33 +212,43 @@ for i in {1..60}; do
 done
 
 # ---------- criar admin ----------
-echo "-> Criando usuário admin…"
+echo "-> Criando usuário admin (como 'git')…"
 set +e
-docker exec -u "${PUID}:${PGID}" -i gitea gitea admin user create \
-  --username "${GITEA_ADMIN_USER}" \
-  --password "${GITEA_ADMIN_PASSWORD}" \
-  --email "${GITEA_ADMIN_EMAIL}" \
-  --admin \
-  --must-change-password=false \
-  --config /data/gitea/conf/app.ini 2>/dev/null
+docker exec -u git -i gitea \
+  gitea admin user create \
+    --username "${GITEA_ADMIN_USER}" \
+    --password "${GITEA_ADMIN_PASSWORD}" \
+    --email "${GITEA_ADMIN_EMAIL}" \
+    --admin \
+    --must-change-password=false \
+    --config /data/gitea/conf/app.ini 2>/dev/null
+CREATE_STATUS=$?
 set -e
 
-# ---------- gerar token ----------
-echo "-> Gerando token de acesso do admin…"
-ADMIN_TOKEN="$(
-  docker exec -u "${PUID}:${PGID}" -i gitea \
-    gitea admin user generate-access-token \
-    --username "${GITEA_ADMIN_USER}" \
-    --token-name "bootstrap-api" \
-    --scopes "all" \
-    --raw 2>/dev/null || true
-)"
+if [ "$CREATE_STATUS" -ne 0 ]; then
+  echo "-> Aviso: não foi possível criar usuário admin via CLI (talvez já exista?)."
+fi
 
-if [ -n "$ADMIN_TOKEN" ]; then
+# ---------- gerar token ----------
+echo "-> Gerando token de acesso do admin (CLI, como 'git')…"
+set +e
+ADMIN_TOKEN="$(
+  docker exec -u git -i gitea \
+    gitea admin user generate-access-token \
+      --username "${GITEA_ADMIN_USER}" \
+      --token-name "bootstrap-api" \
+      --raw \
+      --config /data/gitea/conf/app.ini
+)"
+STATUS=$?
+set -e
+
+if [ "$STATUS" -ne 0 ] || [ -z "$ADMIN_TOKEN" ]; then
+  echo "-> NÃO FOI POSSÍVEL gerar token automaticamente!"
+  ADMIN_TOKEN=""
+else
   echo "GITEA_ADMIN_TOKEN=${ADMIN_TOKEN}" >> "${ENV_FILE}"
   echo "-> Token salvo no .env"
-else
-  echo "-> NÃO FOI POSSÍVEL gerar token automaticamente!"
 fi
 
 echo ""

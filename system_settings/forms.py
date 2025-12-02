@@ -198,3 +198,49 @@ class GiteaSettingsForm(forms.Form):
                     self.add_error(field, "Este campo é obrigatório quando o Gitea não é externo.")
 
         return cleaned_data
+
+
+class OpenAISettingsForm(forms.Form):
+    """
+    Configurações básicas para integração com APIs de LLM (OpenAI-compatíveis).
+
+    A ideia é manter genérico:
+      - endpoint base (OPENAI_API_BASE)
+      - chave (OPENAI_API_KEY)
+      - modelo padrão para chat/completion (OPENAI_MODEL)
+      - modelo de embeddings, se você for usar RAG (OPENAI_EMBEDDINGS_MODEL)
+    """
+
+    enable_openai = forms.BooleanField(
+        label="Ativar integração com OpenAI / LLM compatível",
+        required=False,
+        help_text="Se desmarcado, o sistema não tentará chamar o provedor de IA.",
+    )
+
+    openai_api_base = forms.CharField(
+        label="OPENAI_API_BASE",
+        required=False,
+        initial="https://api.openai.com/v1",
+        help_text="Endpoint base da API compatível com OpenAI (incluindo /v1).",
+    )
+
+    openai_api_key = forms.CharField(
+        label="OPENAI_API_KEY",
+        widget=forms.PasswordInput(render_value=True),
+        required=False,
+        help_text="Chave de API do provedor (NUNCA exponha isso publicamente).",
+    )
+
+    openai_model = forms.CharField(
+        label="OPENAI_MODEL",
+        required=False,
+        initial="gpt-4.1-mini",
+        help_text="Modelo padrão para chat/completion (ex.: gpt-4.1, gpt-4.1-mini, etc.).",
+    )
+
+    openai_embeddings_model = forms.CharField(
+        label="OPENAI_EMBEDDINGS_MODEL",
+        required=False,
+        initial="text-embedding-3-large",
+        help_text="Modelo de embeddings usado para RAG / busca semântica.",
+    )

@@ -1,14 +1,30 @@
-# Ignorar virtualenv e configs locais
-venv/
+# Ignorar metadados do git
+.git
+.gitignore
+
+# Ignorar arquivos temporários / IDE
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.sqlite3
+*.db
+*.swp
+*.swo
+.vscode
+.idea
 .env
 .env.*
-*.pyc
-__pycache__/
-*.log
 
-# IMPORTANTE: ignorar tudo do Gitea
-doker/getea/gitea/
-doker/getea/gitea/**
+# Ignorar dados do Gitea (não fazem parte da imagem do Django)
+gitea
+gitea/*
+doker/getea/gitea
+doker/getea/gitea/*
+doker/getea/gitea/data
+doker/getea/gitea/db
 
-doker/getea/.env
-doker/getea/docker-compose.yml
+# Ignorar outras pastas de dados se aparecerem
+media
+staticfiles

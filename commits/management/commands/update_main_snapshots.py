@@ -1,3 +1,4 @@
+#commits/management/commands/update_main_snapshots.py
 from __future__ import annotations
 
 from django.core.management.base import BaseCommand

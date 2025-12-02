@@ -1,4 +1,4 @@
-#system_settings/views.py
+# system_settings/views.py
 import os
 from pathlib import Path
 
@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.shortcuts import render, redirect
 
-from .forms import EmailSettingsForm, GiteaSettingsForm
+from .forms import EmailSettingsForm, GiteaSettingsForm, OpenAISettingsForm
 from .utils import (
     get_base_dir,
     write_env_file,
@@ -64,13 +64,30 @@ def _initial_gitea_from_env() -> dict:
     }
 
 
+def _initial_openai_from_env() -> dict:
+    """
+    Lê as configurações de OpenAI / LLM compatível do ambiente.
+    """
+    env = os.environ
+    return {
+        "enable_openai": env.get("ENABLE_OPENAI", "0") == "1",
+        "openai_api_base": env.get("OPENAI_API_BASE", "https://api.openai.com/v1"),
+        "openai_api_key": env.get("OPENAI_API_KEY", ""),
+        "openai_model": env.get("OPENAI_MODEL", "gpt-4.1-mini"),
+        "openai_embeddings_model": env.get(
+            "OPENAI_EMBEDDINGS_MODEL",
+            "text-embedding-3-large",
+        ),
+    }
+
+
 # Decorator simples para reaproveitar a regra de superusuário
 def superuser_required(view_func):
     return login_required(user_passes_test(lambda u: u.is_superuser)(view_func))
 
 
 # ============================================================
-#  VIEW 1 — Tela inicial (escolher Email ou Gitea)
+#  VIEW 1 — Tela inicial (resumo Email / Gitea / OpenAI)
 # ============================================================
 
 @superuser_required
@@ -80,9 +97,11 @@ def settings_home_view(request):
     Mostra um resumo e links para:
       - Configurações de e-mail
       - Configurações de Gitea
+      - Configurações de OpenAI / LLM
     """
     email_initial = _initial_email_from_env()
     gitea_initial = _initial_gitea_from_env()
+    openai_initial = _initial_openai_from_env()
 
     context = {
         "email_summary": {
@@ -94,6 +113,11 @@ def settings_home_view(request):
             "use_external_gitea": gitea_initial["use_external_gitea"],
             "base_url": gitea_initial["gitea_base_url"],
             "admin_user": gitea_initial["gitea_admin_user"],
+        },
+        "openai_summary": {
+            "enabled": openai_initial["enable_openai"],
+            "api_base": openai_initial["openai_api_base"],
+            "model": openai_initial["openai_model"],
         },
     }
     return render(request, "system/settings_home.html", context)
@@ -257,6 +281,66 @@ def gitea_settings_view(request):
     return render(
         request,
         "system/gitea_settings.html",
+        {
+            "form": form,
+        },
+    )
+
+
+# ============================================================
+#  VIEW 4 — Configurações de OPENAI / LLM
+# ============================================================
+
+@superuser_required
+def openai_settings_view(request):
+    """
+    Tela específica para configurar integração com OpenAI / provedores compatíveis.
+
+    Ao salvar:
+      - Atualiza o .env raiz com:
+          ENABLE_OPENAI
+          OPENAI_API_BASE
+          OPENAI_API_KEY
+          OPENAI_MODEL
+          OPENAI_EMBEDDINGS_MODEL
+      - Tenta recarregar o Django para que novas configs entrem em vigor.
+    """
+    base_dir = get_base_dir()
+    root_env_path: Path = base_dir / ".env"
+
+    if request.method == "POST":
+        form = OpenAISettingsForm(request.POST)
+        if form.is_valid():
+            cd = form.cleaned_data
+
+            updates = {
+                "ENABLE_OPENAI": "1" if cd["enable_openai"] else "0",
+                "OPENAI_API_BASE": cd["openai_api_base"],
+                "OPENAI_API_KEY": cd["openai_api_key"],
+                "OPENAI_MODEL": cd["openai_model"],
+                "OPENAI_EMBEDDINGS_MODEL": cd["openai_embeddings_model"],
+            }
+
+            update_env_file_keys(
+                root_env_path,
+                updates,
+                header="# .env - Ambiente do TheManager (OpenAI / LLM settings gerenciados via painel)",
+            )
+
+            # Recarregar Django para aplicar novas configs
+            reload_django_process()
+
+            messages.success(
+                request,
+                "Configurações de OpenAI / LLM salvas. O Django será recarregado.",
+            )
+            return redirect("system_settings:openai_settings")
+    else:
+        form = OpenAISettingsForm(initial=_initial_openai_from_env())
+
+    return render(
+        request,
+        "system/openai_settings.html",
         {
             "form": form,
         },

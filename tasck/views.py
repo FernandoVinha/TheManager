@@ -17,13 +17,12 @@ from django.views.generic import (
 )
 
 from projects.models import Project, ProjectMember
-from .models import Task, TaskMember, TaskMessage, TaskCommit, Label
+from .models import Task, TaskMember, TaskMessage, Label
 from .forms import (
     TaskForm,
     TaskMemberForm,
     TaskMessageForm,
     KanbanFilterForm,
-    TaskCommitReviewForm,
 )
 
 
@@ -174,7 +173,7 @@ class TaskDetailView(LoginRequiredMixin, DetailView):
             super()
             .get_queryset()
             .select_related("project", "assignee", "reporter")
-            .prefetch_related("labels", "memberships__user", "messages", "commits")
+            .prefetch_related("labels", "memberships__user", "messages")
         )
         user = self.request.user
         if getattr(user, "can_manage_projects", False):
@@ -187,7 +186,6 @@ class TaskDetailView(LoginRequiredMixin, DetailView):
         ctx = super().get_context_data(**kwargs)
         ctx["message_form"] = TaskMessageForm()
         ctx["messages_list"] = self.object.messages.order_by("created_at", "pk")
-        ctx["commits_list"] = self.object.commits.all().order_by("-created_at")
         return ctx
 
     def post(self, request, *args, **kwargs):
@@ -415,48 +413,6 @@ class ProjectTaskListView(LoginRequiredMixin, View):
             request,
             self.template_name,
             {"project": project, "tasks": tasks, "form": form},
-        )
-
-
-# =========================
-# Commits da Task
-# =========================
-
-class TaskCommitDetailView(LoginRequiredMixin, View):
-    """
-    Viewer/Editor de commit (campos de curadoria + processed).
-    """
-    template_name = "tasck/commit_detail.html"
-
-    def get(self, request, task_id: int, sha: str):
-        task = get_object_or_404(Task, pk=task_id)
-        if not _user_can_view_project(request.user, task.project):
-            raise PermissionDenied()
-
-        commit = get_object_or_404(TaskCommit, task=task, sha=sha)
-        form = TaskCommitReviewForm(instance=commit)
-        return render(
-            request,
-            self.template_name,
-            {"task": task, "commit": commit, "form": form},
-        )
-
-    def post(self, request, task_id: int, sha: str):
-        task = get_object_or_404(Task, pk=task_id)
-        if not _user_can_edit_project(request.user, task.project) and task.reporter_id != request.user.id:
-            raise PermissionDenied()
-
-        commit = get_object_or_404(TaskCommit, task=task, sha=sha)
-        form = TaskCommitReviewForm(request.POST, instance=commit)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Commit notes saved.")
-            return redirect("tasck:commit_detail", task_id=task.id, sha=commit.sha)
-
-        return render(
-            request,
-            self.template_name,
-            {"task": task, "commit": commit, "form": form},
         )
 
 

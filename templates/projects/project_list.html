@@ -12,7 +12,7 @@
       <button class="btn btn-outline-secondary" type="submit">Search</button>
     </form>
     {% if U and U.can_create_projects %}
-      <a class="btn btn-primary" href="{% url 'project_create' %}">New Project</a>
+      <a class="btn btn-primary" href="{% url 'projects:project_create' %}">New Project</a>
     {% endif %}
   </div>
 </div>
@@ -23,14 +23,14 @@
       <div class="col">
         <div class="card h-100 shadow-sm">
           {% if p.image %}
-            <a href="{% url 'project_detail' p.pk %}">
+            <a href="{% url 'projects:project_detail' p.pk %}">
               <img src="{{ p.image.url }}" class="card-img-top" alt="{{ p.name }}" style="object-fit:cover; height:180px;">
             </a>
           {% endif %}
           <div class="card-body d-flex flex-column">
             <div class="d-flex justify-content-between align-items-start mb-2">
               <h5 class="card-title mb-0">
-                <a href="{% url 'project_detail' p.pk %}" class="text-decoration-none">{{ p.name }}</a>
+                <a href="{% url 'projects:project_detail' p.pk %}" class="text-decoration-none">{{ p.name }}</a>
               </h5>
               <span class="badge {% if p.visibility == 'public' %}text-bg-success{% else %}text-bg-secondary{% endif %}">
                 {{ p.get_visibility_display }}
@@ -40,11 +40,11 @@
             <p class="card-text flex-grow-1">{{ p.description|default:"(no description)"|truncatechars:140 }}</p>
 
             <div class="d-flex gap-2 mt-auto">
-              <a class="btn btn-sm btn-outline-primary" href="{% url 'project_detail' p.pk %}">Open</a>
+              <a class="btn btn-sm btn-outline-primary" href="{% url 'projects:project_detail' p.pk %}">Open</a>
               {% if U and U.can_manage_projects %}
-                <a class="btn btn-sm btn-outline-secondary" href="{% url 'project_edit' p.pk %}">Edit</a>
-                <a class="btn btn-sm btn-outline-warning" href="{% url 'project_members' p.pk %}">Members</a>
-                <a class="btn btn-sm btn-outline-danger" href="{% url 'project_delete' p.pk %}">Delete</a>
+                <a class="btn btn-sm btn-outline-secondary" href="{% url 'projects:project_edit' p.pk %}">Edit</a>
+                <a class="btn btn-sm btn-outline-warning" href="{% url 'projects:project_members' p.pk %}">Members</a>
+                <a class="btn btn-sm btn-outline-danger" href="{% url 'projects:project_delete' p.pk %}">Delete</a>
               {% endif %}
             </div>
           </div>
